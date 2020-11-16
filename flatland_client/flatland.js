@@ -36,13 +36,17 @@ function selectWorld( worldList ){
 	const selector = new popups.create( "Select World", app );
 	for( let world of worldList ) {
 		const row = document.createElement( "div" );
+		row.style.display = "table-row";
 		const name = document.createElement( "span" );
 		name.textContent = world.name;
+		name.style.display = "table-cell";
 		row.appendChild( name );
 		const open = popups.makeButton( row, "Open", ((world)=>()=>{
 			l.ws.send( JSOX.stringify( {op:'world', world:world } ) );
-			this.hide();
+			selector.hide();
 		})(world) );
+		open.style.display = "table-cell";
+		open.style.float = "right";
 		selector.appendChild( row );
 	}
 
@@ -50,6 +54,8 @@ function selectWorld( worldList ){
 		const row = document.createElement( "div" );
 		const name = document.createElement( "span" );
 		name.textContent = "New World";
+		name.style.display = "table-cell";
+		row.style.display = "table-row";
 		row.appendChild( name );
 		const open = popups.makeButton( row, "New", ()=>{
 			const question = popups.simpleForm( "Enter new world name", "Name:", "My World", (val)=>{
@@ -60,10 +66,16 @@ function selectWorld( worldList ){
 			} );
 			question.show();
 		} );
+		open.style.display = "table-cell";
+		open.style.float = "right";
 		selector.appendChild( row );
 	}
 
 	selector.show();
+}
+
+function setupWorld( world ) {
+	console.log( "Okay world data:", world.name );
 }
 
 function processMessage( msg ) {
@@ -74,8 +86,11 @@ function processMessage( msg ) {
 	} else if( msg.op === "create" ) {
 		if( msg.sub === "sector" ) {
 		}	
+	} else if( msg.op === "error" ) {
+	  	console.log( "ERROR:", msg );
+	} else {
+		console.log( "Unhandled:", msg );
 	}
-
 }
 
 openSocket();
