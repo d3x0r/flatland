@@ -23,7 +23,7 @@ const l = {
 
 class GameWorld {
 	#playerList = [];
-	world = new World();
+	#world = null;
 	name = null;
 	constructor( name ) {
 		
@@ -38,6 +38,11 @@ class GameWorld {
 				const w = JSOX.parse( data );
 				return w;
 			} )
+		} ).catch( ()=>{
+			const w = new World();
+			return file.create( this.name ).then( file=>{
+				return file.write( JSOX.stringify( w ) ).then( ()=>w );
+			} );
 		} );
 		return this.#world;
 	}	
@@ -139,14 +144,22 @@ server.onconnect( function (ws) {
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
 		} else if( msg.op === "create" ) {
 			if( msg.sub === "world" ) {
-				const newWorld = new World(msg.name);
-				l.worlds.push( new GameWorld( msg.name ) );
-				root.has( msg.name ).then( ()=>{
+				const newWorld = new GameWorld(msg.name);
+				l.worlds.push( newWorld );
+				console.log("Lookup", root, msg.name );
+				root.has( msg.name ).then( (asdf)=>{
+					console.log( "SUCCESS?", asdf );
 					ws.send( JSOX.stringify( {op:"error", error:"World already exists" } ) );
 					return;
-				} ).catch( ()=>{
+				} ).catch( (asfd)=>{
+					console.log( "This should have the file, but doesn't?", asfd );
 					root.create( msg.name ).then( (world)=>{
+						if( world )  {
+						console.log( "File:", world );
 						world.write( JSOX.stringify( newWorld ) );
+						}else {
+							
+						}
 					} );
 				} );
 				newWorld.addPlayer( ws );
