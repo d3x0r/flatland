@@ -4,7 +4,10 @@ import {sack} from "sack.vfs" ;
 const JSOX = sack.JSOX;
 const storage = sack.ObjectStorage( "store.os" );
 import path from "path";
-import {World} from "./flatland.classes.mjs";
+import {classes,World} from "./flatland_client/flatland.classes.mjs";
+
+classes.setEncoders( JSOX );
+classes.setDecoders( JSOX );
 
 storage.getRoot().then( r=>{
 	console.log( "Root:", r );
@@ -18,7 +21,8 @@ let root = null;
 console.log( "Root?", root );
 
 const l = {
-	worlds : [],	
+	worlds : [],
+	
 }
 
 class GameWorld {
@@ -35,15 +39,24 @@ class GameWorld {
 	get world() {
 		this.#world = root.open( this.name ).then(file=>{
 			return file.read().then( data=>{
-				const w = JSOX.parse( data );
+				const w = ( data && JSOX.parse( data ) ) || new World();
+				if( !w.sectors.length ){
+					w.createSquareSector( 0, 0 );
+					file.write( w );
+				}
+				console.log( "Parsed:", w, data );
 				return w;
 			} )
 		} ).catch( ()=>{
 			const w = new World();
-			return file.create( this.name ).then( file=>{
+			w.createSquareSector( 0, 0 );
+			return root.open( this.name ).then( file=>{
+				console.log( "writing initial file:", file, w );
+				
 				return file.write( JSOX.stringify( w ) ).then( ()=>w );
 			} );
 		} );
+		console.log( "world should be some sort of promise", this.#world)
 		return this.#world;
 	}	
 	addPlayer(ws) {
@@ -142,32 +155,56 @@ server.onconnect( function (ws) {
                 //ws.send( msg );
 		if( msg.op === "worlds" ) {
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
+		} else if( msg.op === "world" ) {
+				const world = l.worlds.find( w=>w.name === msg.world.name );
+				if( world ) {
+					world.world.then( (world)=>{
+						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
+						console.log( "Loaded this world, and can now send it.", world );
+						ws.send( JSOX.stringify( {op:"world", world:world } ) );
+					} );	
+				}
 		} else if( msg.op === "create" ) {
 			if( msg.sub === "world" ) {
-				const newWorld = new GameWorld(msg.name);
-				l.worlds.push( newWorld );
 				console.log("Lookup", root, msg.name );
-				root.has( msg.name ).then( (asdf)=>{
-					console.log( "SUCCESS?", asdf );
-					ws.send( JSOX.stringify( {op:"error", error:"World already exists" } ) );
+				if( !root ) 
+				{
+					ws.send( JSOX.stringify( {op:"error", error:"Directory not ready yet..." } ) );
+					return;
+				}
+
+				root.has( msg.name ).then( (exists)=>{
+					console.log( "exists:",exists)
+					if( exists ) {
+						ws.send( JSOX.stringify( {op:"error", error:"World already exists" } ) );
+					}else {
+						root.create( msg.name ).then( (file)=>{
+							if( !file ) {
+								ws.send( JSOX.stringify( {op:"error", error:"World already exists" } ) );
+								throw new Error( "File already exists; did not create:" + msg.name );
+							}else {
+								const newWorld = new GameWorld(msg.name);
+								l.worlds.push( newWorld );
+								console.log( "File:", newWorld );
+								newWorld.addPlayer( ws );
+								newWorld.world .then( (world)=>{
+									console.log( "AND SEND:", world );
+									ws.send( JSOX.stringify( {op:"world", world:world } ) );
+								})
+							}
+						} );
+	
+					}
 					return;
 				} ).catch( (asfd)=>{
 					console.log( "This should have the file, but doesn't?", asfd );
-					root.create( msg.name ).then( (world)=>{
-						if( world )  {
-						console.log( "File:", world );
-						world.write( JSOX.stringify( newWorld ) );
-						}else {
-							
-						}
-					} );
 				} );
-				newWorld.addPlayer( ws );
-				ws.send( JSOX.stringify( {op:"world", world:newWorld } ) );
 			}
 		}
-		//ws.close();
-		console.log( "need to handle message:", msg );
+		else {
+			//ws.close();
+			console.log( "need to handle message:", msg );
+		}
         } );
 	ws.onclose( function() {
       //console.log( "Remote closed" );

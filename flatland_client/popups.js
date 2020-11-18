@@ -81,7 +81,6 @@ function addCaptionHandler( c, popup_ ) {
 			state.x = evt.x-pRect.left;
 			state.y = evt.y-pRect.top;
 			state.dragging = true;
-			console.log( "Got down." );
 			if( !added ) {	
 				added = true;
 				document.body.addEventListener( "mousemove", mm );
@@ -455,7 +454,8 @@ function createSimpleNotice( title, question, ok ) {
 	form.appendChild( okay );
 	
 	popup.center();
-	popup.hide();
+	// notices should auto show.
+	//popup.hide();
 	return popup;
 }
 
