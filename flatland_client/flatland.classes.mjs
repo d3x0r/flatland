@@ -589,7 +589,7 @@ class World {
 	createSquareSector( x, y ) {
 				
 		const wall1 = new Wall( { world:this, start:null, startAtEnd:false, end:null, endAtEnd:false
-						, using:new Ray( new Vector( x-0.5,0 ), new Vector( 0, 1 ) )  
+						, using:new Ray( new Vector( x-5,0 ), new Vector( 0, 1 ) )  
 								} );
 
 		const sector = new Sector( this );
@@ -597,14 +597,14 @@ class World {
 
 		
 		const wall2 =	new Wall( { world:this, start:wall1, startAtEnd:true, end:null, endAtEnd:false
-						, using:new Ray( new Vector( 0,y+0.5,0 ), new Vector( 1, 0 ) )
+						, using:new Ray( new Vector( 0,y+5,0 ), new Vector( 1, 0 ) )
 								} );
 	
 		const wall3 = new Wall( { world:this, start:wall1, startAtEnd:false, end:null, endAtEnd:true
-						, using:new Ray( new Vector( 0,y-0.5,0 ), new Vector( 1, 0 ) )
+						, using:new Ray( new Vector( 0,y-5,0 ), new Vector( 1, 0 ) )
 								} )
 		const wall4 = new Wall( { world:this, start:wall2, startAtEnd:true, end:wall3, endAtEnd:true
-				, using:new Ray( new Vector( x+0.5,0 ), new Vector( 0, 1 ) )  
+				, using:new Ray( new Vector( x+5,0 ), new Vector( 0, 1 ) )  
 					} );
 			
 		sector.origin;
