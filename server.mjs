@@ -75,7 +75,7 @@ class GameWorld {
 
 function openServer( opts, cb )
 {
-	var serverOpts = opts || {port:Number(process.argv[2])||5000} ;
+	var serverOpts = opts || {port: Number(process.argv[2]) || process.env.PORT || 5000} ;
 	var server = sack.WebSocket.Server( serverOpts )
 	var disk = sack.Volume();
 	console.log( "serving on " + serverOpts.port );
