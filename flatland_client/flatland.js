@@ -23,7 +23,7 @@ const l = {
 
 function openSocket() {
 
-	var ws = new WebSocket("ws://"+location.host+"/", "Flatland");
+	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
 	
 	ws.onopen = function() {
 		// Web Socket is connected. You can send data by send() method.
