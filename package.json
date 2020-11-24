@@ -11,7 +11,7 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "sack.vfs": "github:d3x0r/sack.vfs#1.0.1004-rc5"
+    "sack.vfs": "github:d3x0r/sack.vfs"
   },
   "repository": {
     "type": "git",
