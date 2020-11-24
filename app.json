@@ -1,0 +1,8 @@
+{
+  "name": "Start on Heroku: Node.js",
+  "description": "A barebones Node.js app using sack.vfs",
+  "repository": "https://github.com/d3x0r/flatland",
+  "logo": "",
+  "keywords": ["flatland"],
+  "image": "heroku/nodejs"
+}
