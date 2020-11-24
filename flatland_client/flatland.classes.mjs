@@ -1,5 +1,5 @@
 
-
+let drawLine = null;
 
 class Name {
 	flags = { vertical : false };
@@ -42,6 +42,12 @@ class Vector {
 		this.x += v.x;
 		this.y += v.y;
 		this.z += v.z;
+		return this;
+	}
+	sub(a,b ) {
+		this.x = a.x - b.x;
+		this.y = a.y - b.y;
+		this.z = a.z - b.z;
 		return this;
 	}
 	scale(t ) {
@@ -102,7 +108,8 @@ function FindIntersectionTime(  s1,  o1, s2,  o2 )
 	const ne = (s2.y)
 	const nf = (s2.z)
 
-	console.log( "Inputs:", s1, s2 );
+	
+	//console.log( "Inputs:", s1, s2 );
 	if( ( !s1.x && !s1.y && !s1.z )||
        ( !s2.x && !s2.y && !s2.z ) )
 	  return null;
@@ -203,8 +210,8 @@ class Line {
 	{
 		const pLine1 = this;
 		// intersects line1 with line2
-		// if bEnd1 then update pLine1.dTo else pLine1.dFrom
-		// if bEnd2 then update pLine2.dTo else pLine2.dFrom
+		// if bEnd1 then update pLine1.to else pLine1.from
+		// if bEnd2 then update pLine2.to else pLine2.from
 		let r = FindIntersectionTime(  pLine1.r.n, pLine1.r.o
 									 , pLine2.r.n, pLine2.r.o );
 		console.log( "Result ", r );
@@ -419,6 +426,95 @@ class Sector {
 			this.r.o.set( temp );
 			return this.r.o;
 	}
+
+	contains( p )
+	{
+		// this routine is perhaps a bit excessive - if one set of 
+		// bounding lines is found ( break; ) we could probably return TRUE
+		let pStart, pCur;
+		const norm = new Vector();
+		let plsCur;
+		let even = 0, odd = 0;
+		let priorend = [true];
+		const pSector = this;
+		pCur = pStart = pSector.wall;
+		//lprintf( "------ SECTOR %d --------------", n );
+		if( NearValue( p, this.r.o ) )
+		{
+			//lprintf( "..." );
+			return pSector;
+		}
+		norm.sub( p, this.r.o );
+		do
+		{
+			plsCur = pCur.line;
+			const r = FindIntersectionTime( norm, this.r.o
+				, plsCur.r.n, plsCur.r.o );
+			if( r )
+			{
+			
+				// if T1 < 1.0 or T1 > -1.0 then the intersection is not
+				// beyond the end of this line...  which I guess if the origin is skewed
+				// then one end or another may require success at more than the distance
+				// from the origin to the line...
+				//Log4( "Intersected at %g %g %g -> %g", T1, T2,
+				//	  plsCur->from, plsCur->to );
+				if( ( r.t2 >= plsCur.from && r.t2 <= plsCur.to )
+				   || ( r.t2 >= plsCur.to && r.t2 <= plsCur.from ) )
+				{
+					if( r.t1 > 1.0 )
+						even = 1;
+					else if( r.t1 < -1.0 ) // less than zero - that's the point of the sector origin...
+						odd = 1;
+					if( even && odd ) return true;
+				}
+			}
+			pCur = pCur.next( priorend );
+		}while( pCur !== pStart );
+		return false;
+	}
+
+	findWall( n, o )
+	{
+		let pStart, pCur;
+		let priorend = [true];
+
+		pCur = pStart = this.wall;
+		//Log( "------- FindIntersectingWall ------------ " );
+		do
+		{
+			let T1, T2;
+			let plsCur = pCur.line;
+			//Log1( "FIW Testing %08x", pCur );
+			let r;
+			if( r = FindIntersectionTime( n, o
+				, plsCur.r.n, plsCur.r.o ) )
+			{
+				//Log6( "Intersects somewhere.... %g<%g<%g %g<%g<%g", 0.0, T1, 1.0, plsCur->from, T2, plsCur->to );
+				if( (0 <= r.t1) && (r.t1 <= 1.0) &&
+					(((plsCur.from <= r.t2) && (r.t2 <= plsCur.to))|| 	
+					 ((plsCur.from >= r.t2) && (r.t2 >= plsCur.to)  )) )
+				{
+					//Log( "Intersects within both segments..." );
+					return pCur;
+				}
+			}
+			if( priorend[0] )
+			{
+				priorend[0] = pCur.start_at_end;
+				pCur = pCur.start;
+			}
+			else
+			{
+				priorend[0] = pCur.end_at_end;
+				pCur = pCur.end;
+			}
+		}while( pCur != pStart );
+		return null;
+	}
+	
+	
+
 }
 
 //--------------------------------------------
@@ -629,6 +725,12 @@ class World {
 		newn.name = name;
 		return newn;
 	}
+
+	getSectorAround( o ) {
+		for( let sector of this.sectors ) {
+			if( sector.contains( o ) ) return sector;
+		}
+	}
 /*
 	POBJECT object;
 
@@ -676,7 +778,11 @@ UndoRecord:UndoRecord,
 		jsox.toJSOX( "~N", Name );
 		jsox.toJSOX( "~T", Texture );
 		jsox.toJSOX( "v3", Vector );
+	},
+	setDrawLine(d) {
+		drawLine = d;
 	}
 }
 
-export {classes, World,Sector,Wall,Line,Name,Texture,UndoRecord}
+
+export {classes, World,Sector,Wall,Line,Name,Texture,UndoRecord,Vector}
