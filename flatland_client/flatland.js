@@ -116,12 +116,13 @@ let mouse = {x:0,y:0,drag:false
 	, CurSecOrigin : new Vector()
 	, CurOrigin : new Vector()
 	, CurSlope : null
+	, CurEnds : [null,null]
+
 	, CurSector : null
 	, CurSectors : []
 	, CurWall:null
 	, CurWalls : []
 	//, 
-	, CurEnds : [null,null]
 	, flags : {
 		bSectorOrigin : false,
 		bOrigin : false,
@@ -146,13 +147,16 @@ function canvasRedraw() {
 	ctx.clearRect( 0, 0, l.w, l.h );
 	DrawDisplayGrid();
 //	ctx.
+	mouse.CurSecOrigin = null;
 	for( let sector of l.world.sectors ){
 		const o = sector.origin;
 		if( sector === mouse.CurSector ) {
+			mouse.CurSecOrigin = o;
 			triangle( o.x, o.y, selectedSectorStroke );
 		}
-		else
+		else {
 			triangle( o.x, o.y, unselectedSectorStroke );
+		}
 
 
 
@@ -165,15 +169,17 @@ function canvasRedraw() {
 		// draw the walls.
 		do {
 			ctx.beginPath();
+			let selected = false;
 			if( sector === mouse.CurSector ){
-				if( check === mouse.CurWall )
+				if( check === mouse.CurWall ) {
 					ctx.strokeStyle = selectedWallStroke;
-				else
+				} else {
 					ctx.strokeStyle = unselectedWallStroke;
+				}
 			} else
-				if( check === mouse.CurWall )
+				if( check === mouse.CurWall ) {
 					ctx.strokeStyle = selectedWallStroke;
-				else
+				} else
 					ctx.strokeStyle = "rgb(0,0,0)"
 			pt = check.from;
 			ctx.moveTo( DISPLAY_X(  pt.x ), DISPLAY_Y( pt.y) );
@@ -208,12 +214,18 @@ function canvasRedraw() {
 		ctx.strokeStyle = "rgb(0,0,0)"
 		ctx.moveTo( DISPLAY_X(  pt.x ), DISPLAY_Y( pt.y) );
 		do {
-			triangle( check.line.r.o.x, check.line.r.o.y );
-			const end = check.to;
-			square( end.x, end.y );
-			const start = check.from;
-			square( start.x, start.y );
+			if( check === mouse.CurWall ) {
+				mouse.CurOrigin = check.line.r.o;
+				mouse.CurSlope = check.line.r.n;
+				mouse.CurEnds[0] = check.from;
+				mouse.CurEnds[0] = check.to;
 
+				triangle( check.line.r.o.x, check.line.r.o.y );
+				const end = check.to;
+				square( end.x, end.y );
+				const start = check.from;
+				square( start.x, start.y );
+			}
 			check = check.next(priorend);
 		}while( check != start )
 		// and go back to initial start point
@@ -406,10 +418,10 @@ function canvasRedraw() {
 	{
 		ctx.beginPath();
 		ctx.strokeStyle = c||"rgb(0,127,0)"
-		ctx.moveTo( DISPLAY_X( x ) - 3, DISPLAY_Y(y) + 2 );
-		ctx.lineTo( DISPLAY_X( x )  + 3, DISPLAY_Y(y) + 2 );
-		ctx.lineTo( DISPLAY_X( x )     , DISPLAY_Y(y) - 2 );
-		ctx.lineTo( DISPLAY_X( x )  - 3, DISPLAY_Y(y) + 2 );
+		ctx.moveTo( DISPLAY_X( x ) - 4, DISPLAY_Y(y) + 3 );
+		ctx.lineTo( DISPLAY_X( x )  + 4, DISPLAY_Y(y) + 3 );
+		ctx.lineTo( DISPLAY_X( x )     , DISPLAY_Y(y) - 3 );
+		ctx.lineTo( DISPLAY_X( x )  - 4, DISPLAY_Y(y) + 3 );
 		ctx.stroke();	
 	}	
 
@@ -490,9 +502,10 @@ function setupWorld( world ) {
 		const delx = x - mouse.x;
 		const dely = y - mouse.y ;
 		let o = new Vector( REAL_X(x), REAL_Y(y), 0 );
-		let del = new Vector();
+		let del = new Vector( REAL_SCALE(delx), REAL_SCALE(dely) );
 		canvasRedraw();
-		 DrawLine(0, o, del,0.9,1.1, "rgb(255,255,255)" );
+		//console.log( "Del:", del, delx, dely );
+		DrawLine(0, del, o,-1.0,1.0, "rgb(255,255,255)" );
 
 		if( delx > 0 )
 			mouse.delxaccum ++;
@@ -508,7 +521,6 @@ function setupWorld( world ) {
 			// this is dragigng the background coordinate system.
 			l.xOfs += REAL_SCALE( x - mouse.x);
 			l.yOfs += REAL_SCALE( y - mouse.y);
-			canvasRedraw()
 		}
 		else {
 			if( !(  mouse.flags.bMarkingMerge 
@@ -554,13 +566,13 @@ function setupWorld( world ) {
   
 					  if( mouse.CurSector  )
 					  {
-						  o.x = REAL_X(  mouse.x );
-						  o.y = REAL_Y(  mouse.y );
-						  del = new Vector( REAL_SCALE(  delx ), REAL_SCALE(  dely ) );
+						  //o.x = REAL_X(  mouse.x );
+						  //o.y = REAL_Y(  mouse.y );
+						  //del = new Vector( REAL_SCALE(  delx ), REAL_SCALE(  dely ) );
 
-						  del.scale( 3 );
+						  //del.scale( 3 );
   
-						  del.y = -del.y;
+						  //del.y = -del.y;
 							//console.log( "DEL:", del, mouse.x, x )
 						  //DrawLine( 0, del, o, 0, 1, Color( 90, 90, 90 ) );
   
@@ -572,7 +584,7 @@ function setupWorld( world ) {
 							  // before a wall can be found...
 							  //display->nWalls = 1;
 							  //display->CurWallList = &mouse.CurWall;
-							  console.log( "Set wall:", pNewWall )
+							  //console.log( "Set wall:", pNewWall )
 							  mouse.CurWall = pNewWall;
 							  //BalanceALine( mouse.pWorld, GetWallLine( mouse.pWorld, pNewWall ) );
 							  draw = true;
@@ -591,7 +603,7 @@ function setupWorld( world ) {
 							
 					  if( ps  && ( ps != mouse.CurSector ) )
 					  {
-						  console.log( "marking new current sector? " );
+						  //console.log( "marking new current sector? " );
 						  mouse.CurSecOrigin = ps.r.o;
 						  mouse.CurSector = ps;
 						  mouse.CurSectors.push( mouse.CurSector );

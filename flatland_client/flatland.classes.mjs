@@ -307,9 +307,9 @@ class Wall {
 				}
 				this.start = opts.start;
 				this.start_at_end = opts.startAtEnd;
-				console.log( "Do intersect line 1 start side..." );
+				//console.log( "Do intersect line 1 start side..." );
 				this.line.intersect( false, this.start.line, opts.startAtEnd );
-				console.log( "Intersected lines:", this.line, this.start.line );
+				//console.log( "Intersected lines:", this.line, this.start.line );
 			}
 
 			if( opts.end ) {
@@ -326,7 +326,7 @@ class Wall {
 				console.log( "Intersected lines:", this.line, this.end.line );
 			}else console.log( "Skipping second mating line" );
 		}
-		console.log( "Created wall:", this );
+		//console.log( "Created wall:", this );
 	}
 	next( fromEnd ) {		
 		if( fromEnd[0] ) {
@@ -483,19 +483,19 @@ class Sector {
 		//Log( "------- FindIntersectingWall ------------ " );
 		do
 		{
-			let T1, T2;
 			let plsCur = pCur.line;
-			//Log1( "FIW Testing %08x", pCur );
 			let r;
 			if( r = FindIntersectionTime( n, o
 				, plsCur.r.n, plsCur.r.o ) )
 			{
-				//Log6( "Intersects somewhere.... %g<%g<%g %g<%g<%g", 0.0, T1, 1.0, plsCur->from, T2, plsCur->to );
-				if( (0 <= r.t1) && (r.t1 <= 1.0) &&
+				//console.log( "Intersects somewhere.... %d<%d<%d %d<%d<%d", 0.0
+				//         , r.t1, 1.0, plsCur.from, r.t2, plsCur.to );
+				//if( drawLine )
+				//	drawLine( null, n, o, 0.9, 1.1, 'rgb(255,0,0)')
+				if( (-1 <= r.t1) && (r.t1 <= 1) &&
 					(((plsCur.from <= r.t2) && (r.t2 <= plsCur.to))|| 	
 					 ((plsCur.from >= r.t2) && (r.t2 >= plsCur.to)  )) )
 				{
-					//Log( "Intersects within both segments..." );
 					return pCur;
 				}
 			}
@@ -699,7 +699,7 @@ class World {
 		const wall3 = new Wall( { world:this, start:wall1, startAtEnd:false, end:null, endAtEnd:true
 						, using:new Ray( new Vector( 0,y-5,0 ), new Vector( 1, 0 ) )
 								} )
-		const wall4 = new Wall( { world:this, start:wall2, startAtEnd:true, end:wall3, endAtEnd:true
+		new Wall( { world:this, start:wall3, startAtEnd:true, end:wall2, endAtEnd:true
 				, using:new Ray( new Vector( x+5,0 ), new Vector( 0, 1 ) )  
 					} );
 			

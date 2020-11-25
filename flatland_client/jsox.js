@@ -963,8 +963,8 @@ JSOX.begin = function( cb, reviver ) {
 					if( word == WORD_POS_FIELD /*|| word == WORD_POS_AFTER_FIELD*/ 
 					   || word == WORD_POS_END
 					     && ( protoDef || val.string.length ) ) {
-							if( protoDef && protoDef.protoDef && protoDef.protoDef.protocon ) {
-								tmpobj = new protoDef.protoDef.protocon();
+							if( protoDef && protoDef.protoDef && protoDef.protoDef.protoCon ) {
+								tmpobj = new protoDef.protoDef.protoCon();
 								nextMode = CONTEXT_OBJECT_FIELD;
 							}
 						if( !protoDef || !protoDef.protoDef && val.string ) // class creation is redundant...
@@ -1050,9 +1050,10 @@ JSOX.begin = function( cb, reviver ) {
 				if( _DEBUG_PARSING ) console.log( "Begin a new object; previously pushed into elements; but wait until trailing comma or close previously:%d", val.value_type, val.className );
 
 				val.value_type = VALUE_OBJECT;
-				if( parse_context === CONTEXT_UNKNOWN )
+				if( parse_context === CONTEXT_UNKNOWN ) {
 					elements = tmpobj;
-				else if( parse_context == CONTEXT_IN_ARRAY ) {
+                			nextMode = CONTEXT_OBJECT_FIELD;
+				} else if( parse_context == CONTEXT_IN_ARRAY ) {
 					if( arrayType == -1 ) {
 						// this is pushed later... 
 						//console.log( "PUSHING OPEN OBJECT INTO EXISTING ARRAY - THIS SHOULD BE RE-SET?", JSOX.stringify(context_stack.first.node) );
@@ -1192,7 +1193,6 @@ JSOX.begin = function( cb, reviver ) {
 				}
 				else if( ( result.protoDef = fromProtoTypes.get( val.string ) ) ) {
 					if( !val.className ){
-									console.log( "IN GETPROTO AND FIXING?" );
 						val.className = val.string;
 						val.string = null;
 					}
@@ -1491,7 +1491,7 @@ JSOX.begin = function( cb, reviver ) {
 						negative = false;
 						break;
 					case 44/*','*/:
-						if( word < WORD_POS_END && word != WORD_POS_RESET )
+						if( word < WORD_POS_AFTER_FIELD && word != WORD_POS_RESET )
 							recoverIdent(cInt);
 						if( word == WORD_POS_END || word == WORD_POS_FIELD ) word = WORD_POS_RESET;  // allow collect new keyword
 						//if(_DEBUG_PARSING) 
@@ -1550,6 +1550,7 @@ JSOX.begin = function( cb, reviver ) {
 							if( _DEBUG_PARSING ) console.log( "back in array; push item %d", val.value_type );
 							arrayPush();
 							RESET_VAL();
+							word = WORD_POS_RESET;
 							// undefined allows [,,,] to be 4 values and [1,2,3,] to be 4 values with an undefined at end.
 						} else if( parse_context == CONTEXT_OBJECT_FIELD_VALUE && val.value_type != VALUE_UNSET ) {
 							// after an array value, it will have returned to OBJECT_FIELD anyway
@@ -1725,6 +1726,7 @@ JSOX.begin = function( cb, reviver ) {
 										recoverIdent( cInt );
 									} else {
 										word = WORD_POS_END;
+										val.value_type = VALUE_STRING;
 										val.string += str;
 									}
 								} else {
@@ -1767,7 +1769,6 @@ JSOX.begin = function( cb, reviver ) {
 											if( word == WORD_POS_END )
 												val.string += str;
 										}
-
 									}
 								}
 								
