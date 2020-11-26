@@ -6,10 +6,15 @@ import {JSOX} from "./jsox.js"
 import {popups,Popup} from "./popups.js"
 
 import {classes,Vector} from "./flatland.classes.mjs"
+const parser =  JSOX.begin(processMessage);
 classes.setDecoders( JSOX );
+
+var requiredImages = [];
+var maxRequired = 0;
 
 const l = {
 	world : null,
+	canvas : null,
 	scale : 0.05, 
 	ws : null, // active connection to server.
 	worldCtx : null, // world editor default context
@@ -17,12 +22,12 @@ const l = {
 	yOfs : 0,
 	w : 0,
 	h : 0,
-
+	cursor : newImage( "cursor.png" ),
+	cursorSpot : {x:5, y:5}
 };
 
 
 function openSocket() {
-
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
 	
 	ws.onopen = function() {
@@ -32,8 +37,7 @@ function openSocket() {
 		ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 
-		const msg_ = JSOX.parse( evt.data );
-		processMessage( msg_ );
+		parser.write( evt.data );
 	};
 	ws.onclose = function() { 
 		l.ws = null;
@@ -91,6 +95,9 @@ function selectWorld( worldList ){
 
 //------------------------------------------------------------------
 
+const selectedHotSpot = "rgb(255,255,0)";
+const wallOriginColor = "rgb(0,0,127)"
+
 const unselectedSectorStroke = "rgb(128,45,25)";
 const selectedSectorStroke = "rgb(0,127,0)";
 
@@ -109,12 +116,25 @@ function REAL_SCALE(x) { return x * l.scale;}
 function REAL_X(x) { return REAL_SCALE(  x  )- l.xOfs}
 function REAL_Y(y) { return REAL_SCALE(  y  )- l.yOfs}
 
-let mouse = {x:0,y:0,drag:false
+const Near = (a,b,d )=>a&&b&&( Math.abs(a.x-b.x) < d && Math.abs(a.y-b.y) < d  && Math.abs(a.z - b.z ) < d )
+const tmp = new Vector();
+
+let mouse = {
+	pos : new Vector()
+	,rpos : new Vector()
+	, set x(a) { return this.pos.x; }
+	,set y(a) { return this.pos.y; }
+	, drag:false
 	, delxaccum : 0
 	, delyaccum : 0
 
-	, CurSecOrigin : new Vector()
-	, CurOrigin : new Vector()
+	, mouseLock : {
+		to: null,  // text name of value
+		drag: false, // is dragging
+		near : null, // vector that is where this is
+	}
+	, CurSecOrigin : null
+	, CurOrigin : null
 	, CurSlope : null
 	, CurEnds : [null,null]
 
@@ -136,7 +156,60 @@ let mouse = {x:0,y:0,drag:false
 		bWwallList : false,
 		bNormalMode : false,
 	}
+
+	, isNear(o,n) {
+		if( mouse.mouseLock.near ){
+			if( Near( mouse.mouseLock.near, o, REAL_SCALE(mouse.mouseLock.del)  ) ) {
+			}else {
+				mouse.mouseLock.near = null;
+			}
+		}else {
+			if( Near( o, mouse.CurSecOrigin, REAL_SCALE(10) ) ){
+				mouse.mouseLock.near = mouse.CurSecOrigin;
+				mouse.mouseLock.to = "CurSecOrigin";
+				mouse.mouseLock.del = 30;
+			}
+			if( Near( o, mouse.CurEnds[0], REAL_SCALE(10) ) ){
+				mouse.mouseLock.near = mouse.CurEnds[0];
+				mouse.mouseLock.to = "CurEnds[0]";
+				mouse.mouseLock.del = 30;
+			}
+			if( Near( o, mouse.CurEnds[1], REAL_SCALE(10) ) ){
+				mouse.mouseLock.near = mouse.CurEnds[1];
+				mouse.mouseLock.to = "curEnds[1]";
+				mouse.mouseLock.del = 30;
+			}
+			if( Near( o, mouse.CurSlope, REAL_SCALE(10) ) ){
+				mouse.mouseLock.near = mouse.CurSlope;
+				mouse.mouseLock.to = "CurSlope";
+				mouse.mouseLock.del = 30;
+			}
+			if( Near( o, mouse.CurOrigin, REAL_SCALE(10) ) ){
+				mouse.mouseLock.near = mouse.CurOrigin;
+				mouse.mouseLock.to = "CurOrigin";
+				mouse.mouseLock.del = 30;
+			}
+		}
+	}
+	, drawNear(o,n) {
+		if( mouse.mouseLock && mouse.mouseLock.near ){
+			tmp.sub( o, mouse.mouseLock.near );
+			DrawLine( tmp, mouse.mouseLock.near,0,1.0, "rgb(255,255,255)" );
+		}
+	}
+
 };
+
+
+function DrawLine( d,o,from,to, c ){
+	const ctx = l.worldCtx;
+	ctx.beginPath();
+	ctx.strokeStyle = c
+	ctx.moveTo( DISPLAY_X( o.x + d.x * from), DISPLAY_Y( o.y + d.y * from) );
+	ctx.lineTo( DISPLAY_X( o.x + d.x * to), DISPLAY_Y( o.y + d.y * to) );
+	ctx.stroke();	
+}
+classes.setDrawLine(DrawLine);
 
 
 function canvasRedraw() {
@@ -147,15 +220,19 @@ function canvasRedraw() {
 	ctx.clearRect( 0, 0, l.w, l.h );
 	DrawDisplayGrid();
 //	ctx.
+
+	mouse.drawNear(mouse.rpos);
+
 	mouse.CurSecOrigin = null;
 	for( let sector of l.world.sectors ){
 		const o = sector.origin;
 		if( sector === mouse.CurSector ) {
 			mouse.CurSecOrigin = o;
-			triangle( o.x, o.y, selectedSectorStroke );
+			
+			triangle( o.x, o.y, ( mouse.mouseLock.near === mouse.CurSecOrigin )?selectedHotSpot:  selectedSectorStroke );
 		}
 		else {
-			triangle( o.x, o.y, unselectedSectorStroke );
+			triangle( o.x, o.y,( mouse.mouseLock.near === mouse.CurSecOrigin )?selectedHotSpot: unselectedSectorStroke );
 		}
 
 
@@ -215,16 +292,17 @@ function canvasRedraw() {
 		ctx.moveTo( DISPLAY_X(  pt.x ), DISPLAY_Y( pt.y) );
 		do {
 			if( check === mouse.CurWall ) {
-				mouse.CurOrigin = check.line.r.o;
-				mouse.CurSlope = check.line.r.n;
-				mouse.CurEnds[0] = check.from;
-				mouse.CurEnds[0] = check.to;
 
-				triangle( check.line.r.o.x, check.line.r.o.y );
+				mouse.CurOrigin = check.line.r.o;
+				mouse.CurSlope = check.line.to;
+				mouse.CurEnds[0] = check.from;
+				mouse.CurEnds[1] = check.to;
+
+				triangle( check.line.r.o.x, check.line.r.o.y, ( mouse.mouseLock.near === mouse.CurOrigin )?selectedHotSpot:wallOriginColor );
 				const end = check.to;
-				square( end.x, end.y );
+				square( end.x, end.y, ( mouse.mouseLock.near === check.to )?selectedHotSpot:"rgb(0,0,0)" );
 				const start = check.from;
-				square( start.x, start.y );
+				square( start.x, start.y, ( mouse.mouseLock.near === check.from )?selectedHotSpot:"rgb(0,0,0)" );
 			}
 			check = check.next(priorend);
 		}while( check != start )
@@ -232,7 +310,6 @@ function canvasRedraw() {
 
 
 	}
-
 
 	function DrawDisplayGrid( )
 	{
@@ -413,6 +490,8 @@ function canvasRedraw() {
 		*/
 	}
 
+	drawCursor();
+
 	// slope
 	function triangle(x,y,c)
 	{
@@ -440,32 +519,54 @@ function canvasRedraw() {
 
 }
 
+function drawCursor() {
+	if(document.pointerLockElement === l.canvas ||
+		document.mozPointerLockElement === l.canvas) {
+			const near = mouse.mouseLock.near;
+			if( near ){
+
+				l.worldCtx.drawImage( l.cursor, DISPLAY_X(near.x)-l.cursorSpot.x, DISPLAY_Y(near.y)-l.cursorSpot.y );
+			}
+			else
+		  //console.log('The pointer lock status is now locked');
+		  		l.worldCtx.drawImage( l.cursor, mouse.pos.x, mouse.pos.y );
+	  } else {
+		  console.log('The pointer lock status is now unlocked');
+	  }
+}
+
 
 function setupWorld( world ) {
 	const selector = new popups.create( "World Editor", app );
 	const canvas = document.createElement( "canvas" );
+	canvas.requestPointerLock = canvas.requestPointerLock ||
+                            canvas.mozRequestPointerLock;
+
+	canvas.requestPointerLock();
+
+
 	l.world = world;
 
 	canvas.addEventListener( "wheel", (evt)=>{
 		evt.preventDefault();
 		if( evt.deltaY > 0 )
 		{
-			const oldx = REAL_X( mouse.x );
-			const oldy = REAL_Y( mouse.y );
+			const oldx = REAL_X( mouse.pos.x );
+			const oldy = REAL_Y( mouse.pos.y );
 
 			l.scale *= 1.1;
-			const newx = REAL_X(mouse.x );
-			const newy = REAL_Y( mouse.y );
+			const newx = REAL_X(mouse.pos.x );
+			const newy = REAL_Y( mouse.pos.y );
 
 			l.xOfs += newx - oldx;
 			l.yOfs += newy - oldy;
 			canvasRedraw();
 		}else {
-			const oldx = REAL_X( mouse.x );
-			const oldy = REAL_Y( mouse.y );
+			const oldx = REAL_X( mouse.pos.x );
+			const oldy = REAL_Y( mouse.pos.y );
 			l.scale /= 1.1;
-			const newx = REAL_X(mouse.x );
-			const newy = REAL_Y( mouse.y );
+			const newx = REAL_X(mouse.pos.x );
+			const newy = REAL_Y( mouse.pos.y );
 			l.xOfs += newx - oldx;
 			l.yOfs += newy - oldy;
 			canvasRedraw();
@@ -475,37 +576,34 @@ function setupWorld( world ) {
 		var rect = canvas.getBoundingClientRect();
 		const x = evt.clientX - rect.left;
 		const y = evt.clientY - rect.top;
-		mouse.x = x;
-		mouse.y = y;
-		mouse.drag = true;
+		mouse.pos.x = x;
+		mouse.pos.y = y;
+		mouse.rpos.x = REAL_X(x);
+		mouse.rpos.y = REAL_Y(y);
+		if( mouse.mouseLock.near ){
+			mouse.mouseLock.drag = true;
+		}else
+			mouse.drag = true;
 	})
 
 	function Color(r,g,b){
 		return `rgb(${r},${g},${b})`
 	}
 
-	function DrawLine(display, d,o,from,to, c ){
-		const ctx = l.worldCtx;
-		ctx.beginPath();
-		ctx.strokeStyle = c
-		ctx.moveTo( DISPLAY_X( o.x + d.x * from), DISPLAY_Y( o.y + d.y * from) );
-		ctx.lineTo( DISPLAY_X( o.x + d.x * to), DISPLAY_Y( o.y + d.y * to) );
-		ctx.stroke();	
-	}
-	classes.setDrawLine(DrawLine);
 
 	canvas.addEventListener( "mousemove", (evt)=>{
 		var rect = canvas.getBoundingClientRect();
 		const x = evt.clientX - rect.left;
 		const y = evt.clientY - rect.top;
 
-		const delx = x - mouse.x;
-		const dely = y - mouse.y ;
+		const delx = x - mouse.pos.x;
+		const dely = y - mouse.pos.y ;
 		let o = new Vector( REAL_X(x), REAL_Y(y), 0 );
 		let del = new Vector( REAL_SCALE(delx), REAL_SCALE(dely) );
+		mouse.isNear(o,del);
 		canvasRedraw();
 		//console.log( "Del:", del, delx, dely );
-		DrawLine(0, del, o,-1.0,1.0, "rgb(255,255,255)" );
+		DrawLine( del, o,-1.0,1.0, "rgb(255,255,255)" );
 
 		if( delx > 0 )
 			mouse.delxaccum ++;
@@ -516,20 +614,31 @@ function setupWorld( world ) {
 		else if( dely < 0 )
 			mouse.delyaccum--;
 
+		const rx = REAL_SCALE( x - mouse.pos.x);
+		const ry = REAL_SCALE( y - mouse.pos.y);
 
 		if( mouse.drag ) {
 			// this is dragigng the background coordinate system.
-			l.xOfs += REAL_SCALE( x - mouse.x);
-			l.yOfs += REAL_SCALE( y - mouse.y);
+			l.xOfs += rx;
+			l.yOfs += ry;
 		}
+
+		if(mouse.mouseLock.to === "CurSecOrigin")
+			ws.send( `{op:move,t:S,sector:${l.CurSector.id},x:${rx},y:${ry}}`)
+		if(mouse.mouseLock.to === "CurEnds[0]")
+			ws.send( `{op:move,t:e0,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
+		if(mouse.mouseLock.to === "curEnds[1]")
+			ws.send( `{op:move,t:e1,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
+		if(mouse.mouseLock.to === "CurSlope")
+			ws.send( `{op:move,t:s,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
+		if(mouse.mouseLock.to === "CurOrigin")
+			ws.send( `{op:move,t:o,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
+
 		else {
 			if( !(  mouse.flags.bMarkingMerge 
 				|| mouse.flags.bSelect
 				|| mouse.flags.bLocked ) )
 		  {
-
-
-
 			  function LockTo(what,extratest, boolvar)	{
 				  if( what )
 					if( (x > (what.x - 4 )) && 
@@ -642,8 +751,10 @@ function setupWorld( world ) {
   
 		}
 
-		mouse.x = x;//mouse.x + (x-mouse.x)/2;
-		mouse.y = y;//mouse.y + (y-mouse.y)/2;
+		mouse.pos.x = x;//mouse.x + (x-mouse.x)/2;
+		mouse.pos.y = y;//mouse.y + (y-mouse.y)/2;
+		mouse.rpos.x = REAL_X(x);
+		mouse.rpos.y = REAL_Y(y);
 	})
 	canvas.addEventListener( "mouseup", (evt)=>{
 		mouse.drag = false;
@@ -677,6 +788,16 @@ function processMessage( msg ) {
 	} else if( msg.op === "create" ) {
 		if( msg.sub === "sector" ) {
 		}	
+	} else if( msg.op === "move" ) {
+		if( msg.t === "S" ) {
+			// sector
+		}
+		if( msg.t === "n" ) {
+			// slope
+		}
+		if( msg.t === "o" ) {
+			// wall origin
+		}
 	} else if( msg.op === "error" ) {
 	  	console.log( "ERROR:", msg );
 	} else {
@@ -686,4 +807,19 @@ function processMessage( msg ) {
 
 openSocket();
 
+
+
+function newImage(src) {  
+	var i = new Image();
+	i.crossOrigin = "Anonymous";
+	i.src = src;
+	requiredImages.push( i );
+	maxRequired++;
+	i.onload = ()=>{
+			requiredImages.pop( i );
+			//DOM_text.innerHTML = "Loading... " + (100 - 100*requiredImages.length / maxRequired );
+			//if( requiredImages == 0 ) doWork(); };
+	};
+	return i;
+}
 

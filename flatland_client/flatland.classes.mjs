@@ -291,6 +291,8 @@ class Wall {
 	start_at_end = false; // wall_at_start links from end of starting segment
     end = null; // in same sector, mating wall
 	end_at_end = false;   // wall_at_end links from end of ending segment
+	#from = new Vector();
+	#to = new Vector();
 
 	constructor( opts ) {
 		if( opts ) {
@@ -339,12 +341,10 @@ class Wall {
 		return this.start;	
 	}
 	get from() {
-		const pt = new Vector();
-		return pt.addScaled( this.line.r.o, this.line.r.n, this.line.from );
+		return this.#from.addScaled( this.line.r.o, this.line.r.n, this.line.from );
 	}
 	get to() {
-		const pt = new Vector();
-		return pt.addScaled( this.line.r.o, this.line.r.n, this.line.to );
+		return this.#to.addScaled( this.line.r.o, this.line.r.n, this.line.to );
 	}
 	weld( wall ) {
 		if( !this.into && !wall.into ) {
@@ -488,15 +488,14 @@ class Sector {
 			if( r = FindIntersectionTime( n, o
 				, plsCur.r.n, plsCur.r.o ) )
 			{
+				if( drawLine )
+					drawLine(  n, o, 0.9, 1.1, 'rgb(255,0,0)')
 				//console.log( "Intersects somewhere.... %d<%d<%d %d<%d<%d", 0.0
 				//         , r.t1, 1.0, plsCur.from, r.t2, plsCur.to );
-				//if( drawLine )
-				//	drawLine( null, n, o, 0.9, 1.1, 'rgb(255,0,0)')
 				if( (-1 <= r.t1) && (r.t1 <= 1) &&
-					(((plsCur.from <= r.t2) && (r.t2 <= plsCur.to))|| 	
-					 ((plsCur.from >= r.t2) && (r.t2 >= plsCur.to)  )) )
+					(((plsCur.from <= r.t2) && (r.t2 <= plsCur.to)) ) )
 				{
-					return pCur;
+				return pCur;
 				}
 			}
 			if( priorend[0] )
