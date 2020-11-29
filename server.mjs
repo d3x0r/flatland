@@ -10,7 +10,6 @@ classes.setEncoders( JSOX );
 classes.setDecoders( JSOX );
 
 storage.getRoot().then( r=>{
-	console.log( "Root:", r );
 	root = r;
 	for( var file of root.files ) {
 		l.worlds.push( new GameWorld( file.name ) );
@@ -18,21 +17,21 @@ storage.getRoot().then( r=>{
 } );
 let root = null;
 
-console.log( "Root?", root );
-
 const l = {
 	worlds : [],
-	
 }
 
 class GameWorld {
 	#playerList = [];
 	#world = null;
 	name = null;
+
+
 	constructor( name ) {
 		
 		this.name = name;
 	}
+	
 	get players() {
 		return this.#playerList.length;
 	}	
@@ -44,12 +43,14 @@ class GameWorld {
 					w.createSquareSector( 0, 0 );
 					file.write( w );
 				}
+				w.on( "update", w.send );
 				console.log( "Parsed:", w, data );
 				return w;
 			} )
 		} ).catch( ()=>{
 			const w = new World();
 			w.createSquareSector( 0, 0 );
+				w.on( "update", w.send );
 			return root.open( this.name ).then( file=>{
 				console.log( "writing initial file:", file, w );
 				
@@ -67,6 +68,14 @@ class GameWorld {
 		if( idx >= 0 )
 			this.#playerList.slice(idx,1);
 		else console.log( "Failed to find player to remove." );
+	}
+	send(from,msg) {
+		for( var to of this.#playerList ) {
+			if( to === from ) {
+
+			}
+			to.send(msg );
+		}
 	}
 }
 
@@ -147,23 +156,45 @@ server.onaccept( function ( ws ) {
 
 server.onconnect( function (ws) {
 	ws.world = null; // extend socket.
+	ws.lastMessage = Date.now();
 	//console.log( "Connect:", ws );
 	ws.onmessage( function( msg_ ) {
+		ws.lastMessage = Date.now();
 		const msg = JSOX.parse( msg_ );
 		
-        	//console.log( "Received data:", msg );
-                //ws.send( msg );
+      	//console.log( "Received data:", msg );
+        //ws.send( msg );
 		if( msg.op === "worlds" ) {
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
 		} else if( msg.op === "world" ) {
 				const world = l.worlds.find( w=>w.name === msg.world.name );
 				if( world ) {
 					world.world.then( (world)=>{
+						ws.world = world;
+						world.on( "update", ws.send, ws );
+
 						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
 						console.log( "Loaded this world, and can now send it.", world );
 						ws.send( JSOX.stringify( {op:"world", world:world } ) );
 					} );	
 				}
+		} else if( msg.op === "move" ) {
+			console.log( "Server should use this to update also...");
+			if( msg.t === 'S' ) {
+				ws.world.moveSector( msg.sector, msg.x, msg.y );
+				//const m = JSOX.stringify(msg );
+				//ws.world.send( ws, m );
+			}
+			if( msg.t === 'o' ) {
+				//world.walls[msg.wall].move( msg.x, msg.y );
+				//const m = JSOX.stringify(msg );
+				//ws.world.send( ws, m );
+			}
+			if( msg.t === 'n' ) {
+				//world.walls[msg.wall].move( msg.x, msg.y );
+				//const m = JSOX.stringify(msg );
+				//ws.world.send( ws, m );
+			}
 		} else if( msg.op === "create" ) {
 			if( msg.sub === "world" ) {
 				console.log("Lookup", root, msg.name );
@@ -193,7 +224,6 @@ server.onconnect( function (ws) {
 								})
 							}
 						} );
-	
 					}
 					return;
 				} ).catch( (asfd)=>{
@@ -207,10 +237,23 @@ server.onconnect( function (ws) {
 		}
         } );
 	ws.onclose( function() {
-      //console.log( "Remote closed" );
+	  //console.log( "Remote closed" );
+	  if( pingTimer ) clearTimeout( pingTimer );
 		if( ws.world )
 			ws.world.delPlayer(ws);
 	} );
+	let pingTimer =null;
+	pingTick();
+	function pingTick(){
+		let now = Date.now();
+		if( (now - ws.lastMessage) >= 30000 )     {
+			//console.log( "Ping", (now - ws.lastMessage) );
+			ws.ping();
+			ws.lastMessage = now;
+		}
+		
+		pingTimer = setTimeout( pingTick, 30000 - (now - ws.lastMessage) );
+	}
 } );
 
 }

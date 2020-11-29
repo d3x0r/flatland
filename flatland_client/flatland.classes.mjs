@@ -1,5 +1,7 @@
 
 let drawLine = null;
+import {JSOX} from "./jsox.mjs"
+
 
 class Name {
 	flags = { vertical : false };
@@ -86,10 +88,24 @@ class Ray {
 function NearValue(n,m) {
 	return Math.abs( n - m ) < 0.00001;
 }
+function Near(n,m) {
+	return NearValue(n.x,m.x) && NearValue(n.y,m.y) && NearValue(n.z,m.z);
+}
+const paranoidIntersectionTest = 0;
+const intersectionResult = {t1:0,t2:0};
 function FindIntersectionTime(  s1,  o1, s2,  o2 )
 {
-	const result = {t1:0,t2:0};
-	let R1 = new Vector(), R2 = new Vector(), denoms = new Vector();
+	const na = (s1.x)
+	const nb = (s1.y)
+	const nc = (s1.z)
+
+	const nd = (s2.x)
+	const ne = (s2.y)
+	const nf = (s2.z)	
+	if( ( !na && !nb && !nc )||( !nd && !ne && !nf ) )
+		return null;
+	  
+	let denoms = new Vector();
 	let t1, t2, denom;
 
 	const a = (o1.x);
@@ -100,44 +116,18 @@ function FindIntersectionTime(  s1,  o1, s2,  o2 )
 	const e = (o2.y)
 	const f = (o2.z)
 
-	const na = (s1.x)
-	const nb = (s1.y)
-	const nc = (s1.z)
-
-	const nd = (s2.x)
-	const ne = (s2.y)
-	const nf = (s2.z)
-
 	
-	//console.log( "Inputs:", s1, s2 );
-	if( ( !s1.x && !s1.y && !s1.z )||
-       ( !s2.x && !s2.y && !s2.z ) )
-	  return null;
-	  
-	  denoms.crossproduct( s1, s2 ); // - (negative) result...
+	denoms.crossproduct( s1, s2 ); // - (negative) result..
 	denom = denoms.z;
-//   denom =  ( ne * na ) - ( nd * nb );
 	if( NearValue( denom,0 ) )
 	{
 		denom = denoms.y;
-//      denom = ( nd * nc ) - (nf * na );
 		if( NearValue( denom,0 ) )
 		{
 			denom = denoms.x;
-//         denom = ( nb * nf ) - ( ne * nc );
 			if( NearValue( denom, 0 ) )
 			{
-            /*
-//#ifdef FULL_DEBUG
-				Log( "Bad!-------------------------------------------\n" );
-//#endif
-				Log6( "Line 1: <%g %g %g> <%g %g %g>"
-							, s1.x, s1.y, s1.z 
-							, o1.x, o1.y, o1.z );
-				Log6( "Line 2:<%g %g %g> <%g %g %g>"
-							, s2.x, s2.y, s2.z 
-							, o2.x, o2.y, o2.z );
-				*/
+				//console.log( "Bad!-------------------------------------------\n" );
 				return null;
 			}
 			else
@@ -154,50 +144,40 @@ function FindIntersectionTime(  s1,  o1, s2,  o2 )
 	}
 	else
 	{
-		// this one has been tested.......
 		t1 = ( nd * ( b - e ) + ne * ( d - a ) ) / denom;
 		t2 = ( na * ( b - e ) + nb * ( d - a ) ) / denom;
 	}
-	R1.addScaled( o1, s1, t1 );
-	//R1.x = a + na * t1;
-	//R1.y = b + nb * t1;
-	//R1.z = c + nc * t1;
-	R2.addScaled( o2, s2, t2 );
-	//R2.x = d + nd * t2;
-	//R2.y = e + ne * t2;
-	//R2.z = f + nf * t2;
-
-	result.t2 = t2;
-	result.t1 = t1;
-	{	
-		let i;
-		if( ( ((i=0),!NearValue(R1.x,R2.x) )) ||
-			( ((i=1),!NearValue(R1.y,R2.y) )) ||
-			( ((i=2),!NearValue(R1.z,R2.z) )) )
-		{ 
-			/*
-			Log7( "Points (%12.12g,%12.12g,%12.12g) and (%12.12g,%12.12g,%12.12g) coord %d is too far apart"
-			, R1.x, R1.y, R1.z
-			, R2.x, R2.y, R2.z 
-			, i );
-			Log7( "Points (%08X,%08X,%08X) and (%08X,%08X,%08X) coord %d is too far apart"
-			, *(int*)&R1.x, *(int*)&R1.y, *(int*)&R1.z
-			, *(int*)&R2.x, *(int*)&R2.y, *(int*)&R2.z 
-			, i );
-			*/
+	if( paranoidIntersectionTest ) {
+		let R1 = new Vector(), R2 = new Vector();
+		R1.addScaled( o1, s1, t1 );
+		R2.addScaled( o2, s2, t2 );
+		if( !Near(R1,R2) )
 			return null;
-		}
 	}
-	return result;
+
+	intersectionResult.t2 = t2;
+	intersectionResult.t1 = t1;
+	return intersectionResult;
 }
 
 
 class Line {
 	r = new Ray();
 	from = -Infinity;
-    to = Infinity;
-	#flags = { updated : false }
+	#pFrom = new Vector();
+	to = Infinity;
+	#pTo = new Vector();
+	#flags = { 
+		updated : false
+	}
 	constructor( ray, from, to ) {
+		if( ray instanceof Line ){
+			this.r.o.set( ray.r.o );
+			this.r.n.set( ray.r.n );
+			this.from = ray.from;
+			this.to = ray.to;
+			return;
+		}
 		this.r = ray;
 		if( "number" === typeof from ) {
 			this.from = from;
@@ -206,6 +186,18 @@ class Line {
 		this.#flags.updated = true;
 	}
 
+	get ptFrom() {
+		return this.#pFrom.addScaled( this.r.o, this.r.n, this.from );
+	}
+	get ptTo() {
+		return this.#pTo.addScaled( this.r.o, this.r.n, this.to );
+	}
+	set(l){
+		this.r.o.set( l.r.o );
+		this.r.n.set( l.r.n );
+		this.from = l.from;
+		this.to = l.to;
+	}
 	intersect( bEnd1, pLine2, bEnd2 )
 	{
 		const pLine1 = this;
@@ -271,18 +263,19 @@ Line.makeOpenLine = function( r ) {
 //--------------------------------------------
 
 function ASSERT(e) {
-	if( !e ) throw new Error( "Condition is false....");
+	if( !e ) throw new Error( "Condition is false..");
 }
 
 class Wall {
 	#flags = {
-		bUpdating : false, // set this while updating to prevent recursion...
+		bUpdating : false, // set this while updating to prevent recursion..
 	   	detached : false, // joined by joined FAR
-	   	bSkipMate: false, // used when updating sets of lines - avoid double update mating walls
+		   bSkipMate: false, // used when updating sets of lines - avoid double update mating walls
+		   dirty : true,
 	};
 	id = -1;
-    world = null;
-    sector = null;
+    //#world = null;
+    #sector = null;
     name = null;
     line = null;
     into = null; // mate - to new sector
@@ -293,13 +286,17 @@ class Wall {
 	end_at_end = false;   // wall_at_end links from end of ending segment
 	#from = new Vector();
 	#to = new Vector();
+	#events = {};
 
 	constructor( opts ) {
+		this.on("sec",(sec)=>{this.#sector = sec});
 		if( opts ) {
 			opts.world.addWall( this );	
 
 			this.line = Line.makeOpenLine( opts.using );	
 			if( opts.start ) {
+				if( opts.start.#sector )
+					this.#sector = opts.start.#sector;
 				if( opts.startAtEnd ) {
 					ASSERT( opts.start.end === null )
 					opts.start.end = this;
@@ -309,12 +306,14 @@ class Wall {
 				}
 				this.start = opts.start;
 				this.start_at_end = opts.startAtEnd;
-				//console.log( "Do intersect line 1 start side..." );
+				//console.log( "Do intersect line 1 start side.." );
 				this.line.intersect( false, this.start.line, opts.startAtEnd );
 				//console.log( "Intersected lines:", this.line, this.start.line );
 			}
 
 			if( opts.end ) {
+				if( opts.start.#sector )
+					this.#sector = opts.start.#sector;
 				if( opts.endAtEnd ) {
 					ASSERT( opts.end.end === null )
 					opts.end.end = this;
@@ -330,6 +329,13 @@ class Wall {
 		}
 		//console.log( "Created wall:", this );
 	}
+	update() {
+		if( this.#flags.dirty ) {
+			this.#from.addScaled( this.line.r.o, this.line.r.n, this.line.from );
+			this.#to.addScaled( this.line.r.o, this.line.r.n, this.line.to );
+			this.#flags.dirty = false;
+		}
+	}
 	next( fromEnd ) {		
 		if( fromEnd[0] ) {
 			const e = this.end;
@@ -341,10 +347,21 @@ class Wall {
 		return this.start;	
 	}
 	get from() {
-		return this.#from.addScaled( this.line.r.o, this.line.r.n, this.line.from );
+		if( this.#flags.dirty ) this.update();
+		return this.#from;
+	}
+	get dirty() {
+		return this.#flags.dirty;
+	}
+	set dirty(val) {
+		this.#flags.dirty = true;
 	}
 	get to() {
-		return this.#to.addScaled( this.line.r.o, this.line.r.n, this.line.to );
+		if( this.#flags.dirty ) this.update();
+		return this.#to;
+	}
+	set sector(val) {
+		this.#sector = val;
 	}
 	weld( wall ) {
 		if( !this.into && !wall.into ) {
@@ -354,6 +371,503 @@ class Wall {
 			throw new Error( "One of the walls is already linked" );
 		}
 	}
+	countWalls() {
+		let pCur = this;
+		let priorend = [true];
+		let r = 0;
+		do
+		{
+			r++;
+			pCur = pCur.next(priorend)
+		}while( pCur != this );
+		return r;
+	}
+	updateMating( walls, bLockSlope, bErrorOK ){
+		//PWORLD world = GetSetMember( WORLD, &g.worlds, iWorld );
+		const result = {
+			status : true
+		};
+		
+		const pWall = this;
+		function UpdateResult(r) {				 
+			if( !r ) Log1( "Failing update at : %d", __LINE__ ); 
+			if( r )
+				if( !walls.find( w=>w===wall )) walls.push( wall );
+			
+			wall.#flags.bUpdating = false;  
+			result.status = result.status && r;
+			return result; 
+		}
+		
+		var pls = this.line;
+		var AdjustPass = 0;
+		let pStart, pEnd;
+		let ptStart, ptEnd;
+		let lsStartSave, lsEndSave;
+		bErrorOK = true; // DUH! 
+
+		// this wall moved, so for all mating lines, update this beast.
+		if( this.#flags.bUpdating )
+			return true; // this is okay - we're just looping backwards.
+	
+		this.#flags.bUpdating = true;
+		console.log( "UpdateMating(1)" );
+		//Log( "UpdateMating("STRSYM(__LINE__)")" );
+	
+		if( this.countWalls( ) < 4 )
+		{
+			// with a triangular configuration it looks like peers intersect
+			bErrorOK = true;
+		}
+	
+		//Log( "UpdateMating("STRSYM(__LINE__)")" );
+		const wall = this;
+		if( !bLockSlope )
+		{
+			let plsStart, plsEnd;
+			let redo = true;
+			while(redo){
+				redo = false;
+				ptStart = wall.line.ptFrom;
+				ptEnd = wall.line.ptTo;
+			//Readjust:   
+				pStart = wall.start;
+				pEnd = wall.end;
+				plsStart = pStart.line;
+				plsEnd = pEnd.line;
+				lsStartSave = new Line( pStart.line );
+				lsEndSave = new Line( pEnd.line );
+				// check opposite any other walls other than those 
+				// directly related for.. intersection with this line
+				// which I intended to move.
+				if( !bErrorOK )
+				{
+					let pCur = pWall;
+					let plsCur;
+					let priorend = [true];
+					let r;
+					do
+					{
+						plsCur =  pCur.line;
+						if( pCur != pStart &&
+							pCur != pWall &&
+							pCur != pEnd )
+						{
+							if( r = FindIntersectionTime(  pls.r.n, pls.r.o
+								, plsCur.r.n, plsCur.r.o ) )
+							{
+								if( r.t1 >= pls.from && r.t1 <= pls.to &&
+									r.t2 >= plsCur.from && r.t2 <= plsCur.to )
+									return UpdateResult( false );
+							}
+						}
+						pCur = pCur.next(priorend)
+					}while( pCur != pWall );
+				}
+		
+				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				if( pWall.start_at_end )
+				{
+					let ptOther;
+					// compute start point..
+					if( !pStart.#flags.bUpdating )
+					{
+						// compute original end of this line
+						ptOther = plsStart.ptTo;
+						// if original end != new end 
+						if( !Near( ptOther, ptStart ) ) 
+						{
+							let pOtherWall = pStart.start;
+							let plsOther = pOtherWall.line;
+							/*
+							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
+							, __LINE__
+							, ptOther[0]
+							, ptOther[1]
+							, ptOther[2]
+							, ptStart[0]
+							, ptStart[1]
+							, ptStart[2] );
+							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
+							, __LINE__
+							, RCOORDBITS(ptOther[0])
+							, RCOORDBITS(ptOther[1])
+							, RCOORDBITS(ptOther[2])
+							, RCOORDBITS(ptStart[0])
+							, RCOORDBITS(ptStart[1])
+							, RCOORDBITS(ptStart[2]) );
+							*/
+							if( pStart.start_at_end )
+								ptOther = plsOther.ptTo;
+							else
+								ptOther = plsOther.ptFrom;
+		
+							plsStart.from = 0;
+							plsStart.to = 1;
+							plsStart.r.o.set( ptOther );
+							ptOther.sub( ptStart, ptOther );
+							plsStart.r.n.set( ptOther );
+							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
+							if( pStart.into )
+							{
+								pStart.#flags.bUpdating = true;
+								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								{
+									pStart.#flags.bUpdating = false;
+									plsStart.set( lsStartSave );
+									return UpdateResult( false );
+								}
+								pStart.#flags.bUpdating = false;
+							}
+						}
+					}
+				}
+				else  // ( !pWall.start_at_end )
+				{
+					let ptOther;
+					// compute end point..
+					if( !pStart.#flags.bUpdating )
+					{
+						// compute original end of this line
+						ptOther = plsStart.ptFrom;
+						// if original end != new end 
+						console.log( "HERE:", plsStart, ptOther, ptStart )
+						if( !Near( ptOther, ptStart ) )
+						{
+							let pOtherWall = pStart.end;
+							let plsOther = pOtherWall.line;
+							/*
+							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
+							, __LINE__
+							, ptOther[0]
+							, ptOther[1]
+							, ptOther[2]
+							, ptStart[0]
+							, ptStart[1]
+							, ptStart[2] );
+							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
+							, __LINE__
+							, RCOORDBITS(ptOther[0])
+							, RCOORDBITS(ptOther[1])
+							, RCOORDBITS(ptOther[2])
+							, RCOORDBITS(ptStart[0])
+							, RCOORDBITS(ptStart[1])
+							, RCOORDBITS(ptStart[2]) );
+							*/
+							if( pStart.end_at_end )
+								ptOther = plsOther.to;
+							else
+								ptOther = plsOther.from;
+
+							plsStart.from = -1;
+							plsStart.to = 0;
+							plsStart.r.o.set( ptOther )
+
+							//SetPoint( plsStart.r.o, ptOther );
+							ptOther.sub( ptOther, ptStart )
+							plsStart.r.n.set( ptOther );
+							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
+							if( pStart.into )
+							{
+								pStart.#flags.bUpdating = true;
+								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								{
+									pStart.flags.bUpdating = false;
+									plsStart.set( lsStartSave );
+									return UpdateResult( false );
+								}
+								pStart.#flags.bUpdating = false;
+							}
+						}
+						else
+						{
+							//Log( "Points were the same?!" );
+						}
+					}
+				}
+				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				if( pWall.end_at_end )
+				{
+					let ptOther;
+					if( !pEnd.#flags.bUpdating )
+					{
+						// compute original end of this line
+						ptOther = plsEnd.ptTo;
+						// if original end != new end 
+						if( !Near( ptOther, ptEnd ) )
+						{
+							let pOtherWall = pEnd.start;
+							let plsOther = pOtherWall.line;
+							/*
+							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
+							, __LINE__
+							, ptOther[0]
+							, ptOther[1]
+							, ptOther[2]
+							, ptEnd[0]
+							, ptEnd[1]
+							, ptEnd[2] );
+							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
+							, __LINE__
+							, RCOORDBITS(ptOther[0])
+							, RCOORDBITS(ptOther[1])
+							, RCOORDBITS(ptOther[2])
+							, RCOORDBITS(ptEnd[0])
+							, RCOORDBITS(ptEnd[1])
+							, RCOORDBITS(ptEnd[2]) );
+							*/
+							if( pEnd.start_at_end )
+								ptOther = plsOther.ptTo;
+							else
+								ptOther = plsOther.ptFrom;
+							plsEnd.from = 0;
+							plsEnd.to = 1;
+							lsEnd.r.o.set( ptOther );
+							ptOther.sub( ptEnd, ptOther );
+							plsEnd.r.n.set( ptOther );
+							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
+							if( pEnd.into )
+							{
+								pEnd.#flags.bUpdating = true;
+								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								{
+									pEnd.#flags.bUpdating = false;
+									plsStart.set( lsStartSave );
+									plsEnd.set( lsEndSave );
+									return UpdateResult( false );
+								}   
+		
+								pEnd.#flags.bUpdating = false;
+							}
+						}
+					}
+				}
+				else	//(!pWall.end_at_end)
+				{
+					let ptOther;
+					// compute end point
+					if( !pEnd.#flags.bUpdating )
+					{
+		
+						// compute original end of this line
+						ptOther = plsEnd.ptFrom;
+						// if original end != new end 
+						if( !Near( ptOther, ptEnd ) )
+						{
+							let pOtherWall =  pEnd.end;
+							let plsOther = pOtherWall.line;
+							/*
+							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
+							, __LINE__
+							, ptOther[0]
+							, ptOther[1]
+							, ptOther[2]
+							, ptEnd[0]
+							, ptEnd[1]
+							, ptEnd[2] );
+							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
+							, __LINE__
+							, RCOORDBITS(ptOther[0])
+							, RCOORDBITS(ptOther[1])
+							, RCOORDBITS(ptOther[2])
+							, RCOORDBITS(ptEnd[0])
+							, RCOORDBITS(ptEnd[1])
+							, RCOORDBITS(ptEnd[2]) );
+							*/
+							if( pEnd.end_at_end )
+								ptOther = plsOther.ptTo;
+							else
+								ptOther = plsOther.ptFrom;
+							plsEnd.from = -1;
+							plsEnd.to = 0;
+							plsEnd.r.o.set( ptOther );
+							ptOther.sub( ptOther, ptEnd );
+							plsEnd.r.n.set( ptOther );
+							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
+							if( pEnd.into )
+							{
+								pEnd.#flags.bUpdating = true;
+								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								{
+									pEnd.#flags.bUpdating = false;
+									plsStart.set( lsStartSave );
+									plsEnd.set( lsEndSave );
+									return UpdateResult( false );
+								}
+								pEnd.#flags.bUpdating = false;
+							}
+						}
+					}
+				}
+				// check to see if we crossed the mating lines..
+				// if so - uncross them.
+				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				if( !bErrorOK )
+				{
+					let r;
+					if( r = FindIntersectionTime( plsStart.r.n, plsStart.r.o
+						, plsEnd.r.n, plsEnd.r.o ) &&
+						t1 >= plsStart.from && t1 <= plsStart.to && 
+						t2 >= plsEnd.from && t2 <= plsEnd.to  )
+					{
+						let tmp;
+						if( AdjustPass++ )
+						{
+							Log( "We're dying!" );
+							return UpdateResult( false );
+						}
+						tmp = pWall.start_at_end;
+						pWall.start_at_end = pWall.end_at_end;
+						pWall.end_at_end = tmp;
+		
+						{
+							let i = pWall.end;
+							pWall.end = pWall.start;
+							pWall.start = i;
+						}
+		
+						if( pEnd.iWallStart == iWall )
+							pEnd.start_at_end = !pEnd.start_at_end;
+						else
+							pEnd.end_at_end = !pEnd.end_at_end;
+		
+						if( pStart.iWallStart == iWall )
+							pStart.start_at_end = !pStart.start_at_end;
+						else
+							pStart.end_at_end = !pStart.end_at_end;
+						redo = true;
+						continue;
+						//goto Readjust;
+					}
+
+
+					// need to find some way to limit.. what happens when
+					// lines become concave.. how do I detect that simply?
+					//
+					if( r = FindIntersectionTime( plsStart.r.n, plsStart.r.o
+						, plsEnd.r.n, plsEnd.r.o ) &&
+						( ( r.t2 >= plsEnd.from && r.t2 <= plsEnd.to ) || 
+						( r.t1 >= plsStart.from && r.t1 <= plsStart.to ) )  )
+					{
+						// if either segment intersects the other during itself..
+						// then this is an invalid update.. 
+						plsStart.set( lsStartSave );
+						plsEnd.set( lsEndSave );
+						return UpdateResult( false );
+					}
+					// this is still insufficient.. and should continue to check
+					// remaining segments..
+				}
+				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+
+				this.#sector.dirty = true;
+				//ComputeSectorPointList( iWorld, pWall.iSector, NULL );
+				//ComputeSectorOrigin( iWorld, pWall.iSector );
+				
+				//MarkSectorUpdated( iWorld, pWall.iSector );
+			}
+		}
+		else
+		{
+			let plsStart, plsEnd;
+			// handle updates but keep constant slope on mating lines..
+			// check intersect of current with every other line in the
+			// sector - prevents intersection of adjoining
+			pStart = pWall.start;
+			pEnd =  pWall.end ;
+			plsStart = pStart.line;
+			plsEnd = pEnd.line;
+			{
+				let pCur = pWall;
+				let plsCur;
+				let priorend = [true];
+				let r;
+				do
+				{
+					plsCur = pCur.line;
+					if( pCur != pStart &&
+						pCur != pWall &&
+						pCur != pEnd )
+					{
+						if( r = FindIntersectionTime( pls.r.n, pls.r.o
+							, plsCur.r.n, plsCur.r.o ) )
+						{
+							if( r.t1 >= pls.from && r.t1 <= pls.to &&
+								r.t2 >= plsCur.from && r.t2 <= plsCur.to )
+								return UpdateResult( false );
+						}
+					}
+					pCur = pCur.next(priorend);
+				}while( pCur != pWall );
+			}
+	
+			{
+				let r;
+				// sigh - moved line.. update end factors
+				// of intersecting lines..
+				if( r = FindIntersectionTime( pls.r.n, pls.r.o
+					, plsStart.r.n, plsStart.r.o ) )
+				{
+					pls.from = r.t1;
+					if( pWall.start_at_end )
+						plsStart.to = r.t2;
+					else
+						plsStart.from = r.t2;
+					pWall.start.UpdateMating( walls, false, true );
+				}
+				else
+				{
+					Log2( "Failed to intersect wall with iWallStart %s(%d)", __FILE__, __LINE__ );
+					return UpdateResult( false );
+				}
+	
+				if( r = FindIntersectionTime( pls.r.n, pls.r.o
+					, plsEnd.r.n, plsEnd.r.o ) )
+				{
+					pls.to = r.t1;
+					if( pWall.end_at_end )
+						plsEnd.to = r.t2;
+					else
+						plsEnd.from = r.t2;
+					pWall.end.UpdateMating( walls, false, true );
+				}
+				else
+				{
+					Log2( "Failed to intersect wall with iWallStart %s(%d)", __FILE__, __LINE__ );
+					return UpdateResult( false );
+				}
+			}
+		}
+		if( pWall.into )
+		{
+			// only the orogiinal slopes can be locked..
+			// the mating sector might have to move his wall slope.
+			if( !pWall.into.UpdateMating( walls, false /*bLockSlope*/, bErrorOK ) )
+				return UpdateResult( false );
+		}
+		// posts line update too.
+		//ServerBalanceALine( iWorld, pWall.iLine );
+		//ServerBalanceALine( iWorld, pStart.iLine );
+		//ServerBalanceALine( iWorld, pEnd.iLine );
+		pWall.#sector.dirty = true;
+		return UpdateResult( true );
+	
+	}
+
+	on( event, data, data2 ) {
+		if( "function" === typeof data ) {
+			const newEvent = {cb:data,param:data2};
+			if( event in this.#events )
+				this.#events[event].push( newEvent );
+			else
+				this.#events[event] = [newEvent];
+		}
+		else
+			if( event in this.#events ) {
+				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
+			}
+	}
+
 }
 
 
@@ -364,21 +878,23 @@ class Sector {
 		bBody : false,
 	 	bStaticBody : false,
 		bOpenShape : false, // should be drawn with lines not filled polygons (line/curve)
+		dirty : false,
 	};
 	id = -1;
 	name = null;
 	wall = null;
 	r = new Ray();
 	texture = null;
-   	world = null;
+   	#world = null;
 
-	// processed point list...
+	// processed point list..
 	#pointlist = [];
    	#facet = null;
+   #events = {};
 
 	constructor( w, x, y ) {
 		if( w ) {
-			this.world = w;
+			this.#world = w;
 			w.addSector( this );
 		}
 		if( "undefined" !== typeof x ) {
@@ -396,11 +912,10 @@ class Sector {
 			test = test.next(fromEnd);
 		}while( test !== start );
 	}
-	get points() {
-
-		return this.#pointlist;
+	set dirty(val) {
+		this.#flags.dirty = true;
 	}
-	get origin() {
+	#ComputePointList() {
 		const temp = new Vector();
 		const pt = new Vector();
 		let plsCur;
@@ -408,29 +923,36 @@ class Sector {
 		let pStart, pCur;
 		let priorend = [true];
 
-			pCur = pStart = this.wall;
+		pCur = pStart = this.wall;
+		do
+		{	
+			plsCur = pCur.line;//
+			if( priorend[0] )
+				pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.to );
+			else
+				pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.from );
+			temp.sum( pt );
+			npoints++;
+			pCur = pCur.next( priorend );
+		}while( pCur != pStart && pCur );
 
-			do
-			{	
-				plsCur = pCur.line;//
-				if( priorend[0] )
-					pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.to );
-				else
-					pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.from );
-				temp.sum( pt );
-				npoints++;
-				pCur = pCur.next( priorend );
-			}while( pCur != pStart && pCur );
+		temp.scale( 1.0 / npoints );
+		this.r.o.set( temp );
 
-			temp.scale( 1.0 / npoints );
-			this.r.o.set( temp );
-			return this.r.o;
+	}
+	get points() {
+		if( this.#flags.dirty ) this.#ComputePointList()
+		return this.#pointlist;
+	}
+	get origin() {
+		if( this.#flags.dirty ) this.#ComputePointList()
+		return this.r.o;
 	}
 
 	contains( p )
 	{
 		// this routine is perhaps a bit excessive - if one set of 
-		// bounding lines is found ( break; ) we could probably return TRUE
+		// bounding lines is found ( break; ) we could probably return true
 		let pStart, pCur;
 		const norm = new Vector();
 		let plsCur;
@@ -441,7 +963,7 @@ class Sector {
 		//lprintf( "------ SECTOR %d --------------", n );
 		if( NearValue( p, this.r.o ) )
 		{
-			//lprintf( "..." );
+			//lprintf( ".." );
 			return pSector;
 		}
 		norm.sub( p, this.r.o );
@@ -454,17 +976,17 @@ class Sector {
 			{
 			
 				// if T1 < 1.0 or T1 > -1.0 then the intersection is not
-				// beyond the end of this line...  which I guess if the origin is skewed
+				// beyond the end of this line..  which I guess if the origin is skewed
 				// then one end or another may require success at more than the distance
-				// from the origin to the line...
-				//Log4( "Intersected at %g %g %g -> %g", T1, T2,
-				//	  plsCur->from, plsCur->to );
+				// from the origin to the line..
+				//Log4( "Intersected at %g %g %g . %g", T1, T2,
+				//	  plsCur.from, plsCur.to );
 				if( ( r.t2 >= plsCur.from && r.t2 <= plsCur.to )
 				   || ( r.t2 >= plsCur.to && r.t2 <= plsCur.from ) )
 				{
 					if( r.t1 > 1.0 )
 						even = 1;
-					else if( r.t1 < -1.0 ) // less than zero - that's the point of the sector origin...
+					else if( r.t1 < -1.0 ) // less than zero - that's the point of the sector origin..
 						odd = 1;
 					if( even && odd ) return true;
 				}
@@ -490,7 +1012,7 @@ class Sector {
 			{
 				if( drawLine )
 					drawLine(  n, o, 0.9, 1.1, 'rgb(255,0,0)')
-				//console.log( "Intersects somewhere.... %d<%d<%d %d<%d<%d", 0.0
+				//console.log( "Intersects somewhere.. %d<%d<%d %d<%d<%d", 0.0
 				//         , r.t1, 1.0, plsCur.from, r.t2, plsCur.to );
 				if( (-1 <= r.t1) && (r.t1 <= 1) &&
 					(((plsCur.from <= r.t2) && (r.t2 <= plsCur.to)) ) )
@@ -498,21 +1020,43 @@ class Sector {
 				return pCur;
 				}
 			}
-			if( priorend[0] )
-			{
-				priorend[0] = pCur.start_at_end;
-				pCur = pCur.start;
-			}
-			else
-			{
-				priorend[0] = pCur.end_at_end;
-				pCur = pCur.end;
-			}
+			pCur = pCur.next( priorend );
 		}while( pCur != pStart );
 		return null;
 	}
 	
-	
+	move(x,y) {
+		const pStart = this.wall;
+		let pCur = pStart;
+		let priorend = [true];
+		do {
+			const o = pCur.line.r.o;
+			console.log( "Moving sector's line:", x, y );
+			o.x += x
+			o.y += y;
+			pCur = pCur.next( priorend );
+		}while( pCur != pStart );
+		const walls = [];
+		do {
+			pCur.updateMating( walls, false, false )
+			pCur = pCur.next( priorend );
+		}while( pCur != pStart );
+		return walls;
+	}
+
+	on( event, data, data2 ) {
+		if( "function" === typeof data ) {
+			const newEvent = {cb:data,param:data2};
+			if( event in this.#events )
+				this.#events[event].push( newEvent );
+			else
+				this.#events[event] = [newEvent];
+		}
+		else
+			if( event in this.#events ) {
+				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
+			}
+	}
 
 }
 
@@ -575,16 +1119,16 @@ class UndoRecord
 			FLATLAND_MYLINESEG original;
 		} end_start;
 		struct {
-			int nwalls;
+			let nwalls;
 			INDEX *walls;
 			FLATLAND_MYLINESEG *lines;
 		} wallset;
 		struct {
-			int nsectors;
+			let nsectors;
 			INDEX *sectors;
-			_POINT origin;
-			int bCompleted;
-			_POINT endorigin;
+			let origin;
+			let bCompleted;
+			let endorigin;
 		} sectorset;
 	} data;
 */        
@@ -622,6 +1166,8 @@ class World {
     #firstUndo = null;
     #firstRedo = null;
 	name = null;
+	#events = {};
+	
 
 	constructor() {
 	        //this.createSquareSector( 0, 0 );
@@ -688,6 +1234,7 @@ class World {
 								} );
 
 		const sector = new Sector( this );
+		wall1.sector = sector;
 		sector.wall = wall1;
 
 		
@@ -728,6 +1275,33 @@ class World {
 	getSectorAround( o ) {
 		for( let sector of this.sectors ) {
 			if( sector.contains( o ) ) return sector;
+		}
+	}
+
+
+	moveSector( id, x, y ){
+		const sector = this.sectors[id];
+		console.log(this.sectors, this, id, x, y );
+		const walls = sector.move( x, y );
+		console.log( "TRIGGER UPDATE", walls, this.#events );
+		this.on( "update", JSOX.stringify({op:'move',walls:walls} ) );
+	}
+
+	on( event, data, data2 ) {
+		if( "function" === typeof data ) {
+			console.log( "REGSITERING EVENT IN");
+			const newEvent = {cb:data,param:data2};
+			if( event in this.#events )
+				this.#events[event].push( newEvent );
+			else
+				this.#events[event] = [newEvent];
+		}
+		else{
+			console.log( "USING EVENT IN");
+			
+			if( event in this.#events ) {
+				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
+			}
 		}
 	}
 /*

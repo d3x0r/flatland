@@ -2,7 +2,7 @@
 const surface = document.getElementById( "testSurface" );
 const app = document.getElementById( "AppContainer" );
 
-import {JSOX} from "./jsox.js" 
+import {JSOX} from "./jsox.mjs" 
 import {popups,Popup} from "./popups.js"
 
 import {classes,Vector} from "./flatland.classes.mjs"
@@ -34,15 +34,20 @@ function openSocket() {
 		// Web Socket is connected. You can send data by send() method.
 		//ws.send("message to send"); 
 		l.ws = ws;
-		ws.send( '{op:worlds}' );
+		l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 
 		parser.write( evt.data );
 	};
 	ws.onclose = function() { 
 		l.ws = null;
-		
 		setTimeout( openSocket, 5000 ); // 5 second delay.
+		if( l.editor ) {
+			l.editor.remove();
+			l.editor = null;
+			l.canvas = null;
+		}
+
 		// websocket is closed. 
 	};
 }
@@ -159,8 +164,7 @@ let mouse = {
 
 	, isNear(o,n) {
 		if( mouse.mouseLock.near ){
-			if( Near( mouse.mouseLock.near, o, REAL_SCALE(mouse.mouseLock.del)  ) ) {
-			}else {
+			if( !mouse.mouseLock.drag && !Near( mouse.mouseLock.near, o, REAL_SCALE(mouse.mouseLock.del)  ) ) {
 				mouse.mouseLock.near = null;
 			}
 		}else {
@@ -537,8 +541,8 @@ function drawCursor() {
 
 
 function setupWorld( world ) {
-	const selector = new popups.create( "World Editor", app );
-	const canvas = document.createElement( "canvas" );
+	const editor = new popups.create( "World Editor", app );
+	const canvas = l.canvas = document.createElement( "canvas" );
 	canvas.requestPointerLock = canvas.requestPointerLock ||
                             canvas.mozRequestPointerLock;
 
@@ -622,17 +626,18 @@ function setupWorld( world ) {
 			l.xOfs += rx;
 			l.yOfs += ry;
 		}
-
-		if(mouse.mouseLock.to === "CurSecOrigin")
-			ws.send( `{op:move,t:S,sector:${l.CurSector.id},x:${rx},y:${ry}}`)
-		if(mouse.mouseLock.to === "CurEnds[0]")
-			ws.send( `{op:move,t:e0,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
-		if(mouse.mouseLock.to === "curEnds[1]")
-			ws.send( `{op:move,t:e1,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
-		if(mouse.mouseLock.to === "CurSlope")
-			ws.send( `{op:move,t:s,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
-		if(mouse.mouseLock.to === "CurOrigin")
-			ws.send( `{op:move,t:o,wall:${l.CurWall.id},x:${rx},y:${ry}}`)
+		if( mouse.mouseLock.drag && mouse.mouseLock.near ) {
+			if(mouse.mouseLock.to === "CurSecOrigin")
+				l.ws.send( `{op:move,t:S,sector:${mouse.CurSector.id},x:${rx},y:${ry}}`)
+			if(mouse.mouseLock.to === "CurEnds[0]")
+				l.ws.send( `{op:move,t:e0,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+			if(mouse.mouseLock.to === "curEnds[1]")
+				l.ws.send( `{op:move,t:e1,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+			if(mouse.mouseLock.to === "CurSlope")
+				l.ws.send( `{op:move,t:s,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+			if(mouse.mouseLock.to === "CurOrigin")
+				l.ws.send( `{op:move,t:o,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+		}
 
 		else {
 			if( !(  mouse.flags.bMarkingMerge 
@@ -758,6 +763,7 @@ function setupWorld( world ) {
 	})
 	canvas.addEventListener( "mouseup", (evt)=>{
 		mouse.drag = false;
+		mouse.mouseLock.drag = false;
 	})
 
 	l.w = canvas.width = 1024;
@@ -766,10 +772,11 @@ function setupWorld( world ) {
 	l.yOfs = (l.h/2)*l.scale;
 	
 	l.worldCtx= canvas.getContext( "2d" );
-	selector.appendChild( canvas );
+	editor.appendChild( canvas );
 
 	canvasRedraw();
 	console.log( "Okay world data:", world.name );
+	return editor;
 }
 
 let selector = null;
@@ -784,13 +791,14 @@ function processMessage( msg ) {
 		});
 	} else if( msg.op === "world" ) {
 		console.log( "SETUP" );
-		setupWorld( msg.world );
+		l.editor = setupWorld( msg.world );
 	} else if( msg.op === "create" ) {
 		if( msg.sub === "sector" ) {
 		}	
 	} else if( msg.op === "move" ) {
 		if( msg.t === "S" ) {
 			// sector
+			l.world.sectors[msg.id].move(msg.x,msg.y);
 		}
 		if( msg.t === "n" ) {
 			// slope
