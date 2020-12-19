@@ -2,22 +2,164 @@
 let drawLine = null;
 import {JSOX} from "./jsox.mjs"
 
+class Pool {
+	#events = {};
+	#free = [];
+	#used = [];
+	#class = null;
+	parent = null;
+	constructor( parentEventHandler, type ) {
+		this.#class = type;
+		this.parent = parentEventHandler;
+	}
+	get( id, opts ) {
+		if( "object" === typeof id ) {
+			opts = id;
+			id = null;
+		}else {
+			let r = this.#used[id];
+			if( !r ) {
+				const fr = this.#free.findIndex( member=>member.id === id );
+				if( fr >= 0 ) {
+					r = this.#free[fr];
+					this.#free.splice( fr, 1 );
+					this.#used[id] = r;
+				}
+				if( opts ) {
+					r.set( opts );
+				} else
+					throw new Error( "Existing object does not exist in pool.");
+			}else {
+				if( opts ) 
+					r.set( opts );
+			}
+			return r;
+		}
+		if( this.#free.length ){
+			const r = this.#free.pop();
+			r.set( opts );
+			this.#used[r.id] = r;
+			this.parent.on("create", r );
+			return r;
+		}else {
+			const r = new this.#class(this,opts);
+			r.id = this.#used.length;
+			this.#used.push(r);
+			this.parent.on("create", r );
+			return r;
+		}
+	}
+	// for each empty spot, move a used entry.
+	pack() {
+		let lastUsed;
+		let cache = [];
+		while( this.#free.length ) {
+			let n;
+			for( n = this.#used.length-1; n > 0; n-- ) 
+				if( lastUsed = this.#used[n] ) break;
+			const free = this.#free.pop();
+			if( free.id < lastUsed ){
+				this.#used[free.id] = lastUsed;
+				this.#used[n] = null;
+				lastUsed.id = free.id;
+				cache.push(free);
+				free.id = n; // drops this node anyway...
+			}
+		}
+		this.#free = cache;
+	}
 
+	drop( w ) {
+		this.#free.push(w);
+		this.#used[w.id] = null;
+		this.parent.on("destroy", w );
+	}
+
+	on( event, data, data2 ) {
+		if( "function" === typeof data ) {
+			console.log( "REGSITERING EVENT IN");
+			const newEvent = {cb:data,param:data2};
+			if( event in this.#events )
+				this.#events[event].push( newEvent );
+			else
+				this.#events[event] = [newEvent];
+		}
+		else{
+			console.log( "USING EVENT IN");
+			
+			if( event in this.#events ) {
+				let result = null;
+				this.#events[event].forEach( cb=>{ 
+					const zz = cb.cb.call(cb.param,data,data2);
+					if( result ) result = [result].push(zz);
+					else result = zz;
+				} );
+				console.log( "on event result:", result );
+				return result;
+			}
+		}
+	}
+}
+
+class NameSet extends Pool {
+
+	constructor(parent) {
+		super( parent, Name );
+	}
+
+}
+
+class NameMsg{
+}
 class Name {
+	static #autoid = 1;
 	flags = { vertical : false };
-	name = [];
+	name = '';
+	#set = null;
+	// craete/allocate
+	constructor(set, opts) {
+		this.#set = set;
+		name = opts.name || ("Name " + Name.#autoid++);
+	}
+
+	set(opts) {
+		this.name = opts.name;
+	}
+
 }
 
 //--------------------------------------------
 
+class TextureSet extends Pool {
+	constructor(parent) {
+		super( parent, Texture );
+	}
+
+}
+
+class TextureMsg {
+
+}
 class Texture {
 	flags = { color : true };
-       	color = null;
-		name = null;
-		
-		SetSolidColor(c) {
-			this.color = c;
-		}
+	color = null;
+	name = null;
+	set = null;
+
+	constructor(set) {
+		this.set = set;
+	}
+	set(v) {
+		this.name = v;
+	}
+	get() {
+		return this.name;
+	}
+			
+	SetSolidColor(c) {
+		this.color = c;
+	}
+
 };
 
 function AColor(r,g,b,a)
@@ -160,6 +302,17 @@ function FindIntersectionTime(  s1,  o1, s2,  o2 )
 	return intersectionResult;
 }
 
+class LineSet extends Pool {
+	constructor(parent) {
+		super( parent, Line )
+	}
+
+}
+class LineMsg {
+	r = null;
+	f = 0;
+	t = 0;
+}
 
 class Line {
 	r = new Ray();
@@ -170,20 +323,31 @@ class Line {
 	#flags = { 
 		updated : false
 	}
-	constructor( ray, from, to ) {
-		if( ray instanceof Line ){
-			this.r.o.set( ray.r.o );
-			this.r.n.set( ray.r.n );
-			this.from = ray.from;
-			this.to = ray.to;
+	#set = null;
+	
+	constructor( set, opts ) {
+
+		this.#set = set;
+		this.set(opts)
+	}
+	toJSOX() {
+		return JSOX.stringify( {r:this.r, t:this.to,f:this.from});
+	}
+	set( opts ) {
+		if( opts.line && opts.line instanceof Line ){
+			this.r.o.set( opts.ray.r.o );
+			this.r.n.set( opts.ray.r.n );
+			this.from = opts.ray.from;
+			this.to = opts.ray.to;
 			return;
 		}
-		this.r = ray;
-		if( "number" === typeof from ) {
-			this.from = from;
-			this.to = to;
+		this.r = opts.ray;
+		if( "number" === typeof opts.from ) {
+			this.from = opts.from;
+			this.to = opts.to;
 		}
 		this.#flags.updated = true;
+		this.#set.on( "update", this );
 	}
 
 	get ptFrom() {
@@ -192,7 +356,7 @@ class Line {
 	get ptTo() {
 		return this.#pTo.addScaled( this.r.o, this.r.n, this.to );
 	}
-	set(l){
+	setFromm(l){
 		this.r.o.set( l.r.o );
 		this.r.n.set( l.r.n );
 		this.from = l.from;
@@ -257,7 +421,7 @@ class Line {
 };
 
 Line.makeOpenLine = function( r ) {
-	return new Line( r, -Infinity, Infinity );
+	return new Line( { ray:r, from:-Infinity, to:Infinity } );
 }
 
 //--------------------------------------------
@@ -266,6 +430,17 @@ function ASSERT(e) {
 	if( !e ) throw new Error( "Condition is false..");
 }
 
+class WallSet extends Pool {
+	constructor(parent) {
+		super( parent, Wall );
+
+	}
+
+}
+
+class WallMsg {
+
+}
 class Wall {
 	#flags = {
 		bUpdating : false, // set this while updating to prevent recursion..
@@ -276,7 +451,7 @@ class Wall {
 	id = -1;
     //#world = null;
     #sector = null;
-    name = null;
+    //name = null;
     line = null;
     into = null; // mate - to new sector
 
@@ -286,49 +461,61 @@ class Wall {
 	end_at_end = false;   // wall_at_end links from end of ending segment
 	#from = new Vector();
 	#to = new Vector();
-	#events = {};
+	#set = null;
 
-	constructor( opts ) {
-		this.on("sec",(sec)=>{this.#sector = sec});
-		if( opts ) {
-			opts.world.addWall( this );	
-
-			this.line = Line.makeOpenLine( opts.using );	
-			if( opts.start ) {
-				if( opts.start.#sector )
-					this.#sector = opts.start.#sector;
-				if( opts.startAtEnd ) {
-					ASSERT( opts.start.end === null )
-					opts.start.end = this;
-				} else {
-					ASSERT( opts.start.start === null )
-					opts.start.start = this;
-				}
-				this.start = opts.start;
-				this.start_at_end = opts.startAtEnd;
-				//console.log( "Do intersect line 1 start side.." );
-				this.line.intersect( false, this.start.line, opts.startAtEnd );
-				//console.log( "Intersected lines:", this.line, this.start.line );
+	set(opts ) {
+		if( opts.mating ) {
+			if( opts.mating.into ) {
+				throw new Error( "Wall is alreadying mating another wall" );
 			}
-
-			if( opts.end ) {
-				if( opts.start.#sector )
-					this.#sector = opts.start.#sector;
-				if( opts.endAtEnd ) {
-					ASSERT( opts.end.end === null )
-					opts.end.end = this;
-				} else{
-					ASSERT( opts.end.start === null )
-					opts.end.start = this;
-				}
-				this.end = opts.end;
-				this.end_at_end = opts.endAtEnd;
-				this.line.intersect( true, this.end.line,  opts.endAtEnd);
-				console.log( "Intersected lines:", this.line, this.end.line );
-			}else console.log( "Skipping second mating line" );
+			this.into = opts.mating;
+			opts.mating.into = this;
+			this.line = this.into.line;
+			this.#sector = this.into.#sector;
+			return;			
 		}
-		//console.log( "Created wall:", this );
+		//opts.world.addWall( this );	
+
+		this.line = this.#set.parent.getLine( { ray:opts.using } );	
+		if( opts.start ) {
+			if( opts.start.#sector )
+				this.#sector = opts.start.#sector;
+			if( opts.startAtEnd ) {
+				ASSERT( opts.start.end === null )
+				opts.start.end = this;
+			} else {
+				ASSERT( opts.start.start === null )
+				opts.start.start = this;
+			}
+			this.start = opts.start;
+			this.start_at_end = opts.startAtEnd;
+			//console.log( "Do intersect line 1 start side.." );
+			this.line.intersect( false, this.start.line, opts.startAtEnd );
+			//console.log( "Intersected lines:", this.line, this.start.line );
+		}
+
+		if( opts.end ) {
+			if( opts.start.#sector )
+				this.#sector = opts.start.#sector;
+			if( opts.endAtEnd ) {
+				ASSERT( opts.end.end === null )
+				opts.end.end = this;
+			} else{
+				ASSERT( opts.end.start === null )
+				opts.end.start = this;
+			}
+			this.end = opts.end;
+			this.end_at_end = opts.endAtEnd;
+			this.line.intersect( true, this.end.line,  opts.endAtEnd);
+			console.log( "Intersected lines:", this.line, this.end.line );
+		}else console.log( "Skipping second mating line" );
+
 	}
+	constructor( set, opts ) {
+		this.#set = set;
+		if( opts ) this.set(opts);
+	}
+
 	update() {
 		if( this.#flags.dirty ) {
 			this.#from.addScaled( this.line.r.o, this.line.r.n, this.line.from );
@@ -435,8 +622,8 @@ class Wall {
 				pEnd = wall.end;
 				plsStart = pStart.line;
 				plsEnd = pEnd.line;
-				lsStartSave = new Line( pStart.line );
-				lsEndSave = new Line( pEnd.line );
+				lsStartSave = new Line( { line:pStart.line} );
+				lsEndSave = new Line( {line:pEnd.line} );
 				// check opposite any other walls other than those 
 				// directly related for.. intersection with this line
 				// which I intended to move.
@@ -514,7 +701,7 @@ class Wall {
 								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pStart.#flags.bUpdating = false;
-									plsStart.set( lsStartSave );
+									plsStart.setFrom( lsStartSave );
 									return UpdateResult( false );
 								}
 								pStart.#flags.bUpdating = false;
@@ -573,7 +760,7 @@ class Wall {
 								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pStart.flags.bUpdating = false;
-									plsStart.set( lsStartSave );
+									plsStart.setFrom( lsStartSave );
 									return UpdateResult( false );
 								}
 								pStart.#flags.bUpdating = false;
@@ -632,8 +819,8 @@ class Wall {
 								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pEnd.#flags.bUpdating = false;
-									plsStart.set( lsStartSave );
-									plsEnd.set( lsEndSave );
+									plsStart.setFrom( lsStartSave );
+									plsEnd.setFrom( lsEndSave );
 									return UpdateResult( false );
 								}   
 		
@@ -690,8 +877,8 @@ class Wall {
 								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pEnd.#flags.bUpdating = false;
-									plsStart.set( lsStartSave );
-									plsEnd.set( lsEndSave );
+									plsStart.setFrom( lsStartSave );
+									plsEnd.setFrom( lsEndSave );
 									return UpdateResult( false );
 								}
 								pEnd.#flags.bUpdating = false;
@@ -751,8 +938,8 @@ class Wall {
 					{
 						// if either segment intersects the other during itself..
 						// then this is an invalid update.. 
-						plsStart.set( lsStartSave );
-						plsEnd.set( lsEndSave );
+						plsStart.setFrom( lsStartSave );
+						plsEnd.setFrom( lsEndSave );
 						return UpdateResult( false );
 					}
 					// this is still insufficient.. and should continue to check
@@ -854,24 +1041,27 @@ class Wall {
 	
 	}
 
-	on( event, data, data2 ) {
-		if( "function" === typeof data ) {
-			const newEvent = {cb:data,param:data2};
-			if( event in this.#events )
-				this.#events[event].push( newEvent );
-			else
-				this.#events[event] = [newEvent];
-		}
-		else
-			if( event in this.#events ) {
-				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
-			}
-	}
-
+	
 }
 
 
 //--------------------------------------------
+
+class SectorSet extends Pool {
+	constructor(parent) {
+		super( parent, Sector );
+	}
+	
+}
+
+class SectorMsg {
+	id = null;
+	wall = null;
+	flags = null;
+	texture = null;
+	texture = null;
+
+}
 
 class Sector {
 	#flags = {
@@ -889,17 +1079,24 @@ class Sector {
 
 	// processed point list..
 	#pointlist = [];
-   	#facet = null;
-   #events = {};
+	   #facet = null;
+	   #set = null;
 
-	constructor( w, x, y ) {
-		if( w ) {
-			this.#world = w;
-			w.addSector( this );
+	set(opts ) {
+		if( "undefined" !== typeof opts.normal ) {
+			this.r.n.x = opts.normal.x;
+			this.r.n.y = opts.normal.y;
+			this.r.n.z = opts.normal.z;
 		}
-		if( "undefined" !== typeof x ) {
-			this.r.o.x = x;
-			this.r.o.y = y;
+		if( !opts.firstWall ) throw new Error( "Sector initialization requires a wall.");
+		( this.wall = opts.firstWall ).sector = this;
+	}
+	constructor( set, opts  ) {
+		this.#set = set;
+		this.set(opts ); // set set set and #set - great naming scheme.
+		if( "undefined" !== typeof opts.x ) {
+			this.r.o.x = opts.x;
+			this.r.o.y = opts.y;
 		}
 		
 	}
@@ -914,6 +1111,7 @@ class Sector {
 	}
 	set dirty(val) {
 		this.#flags.dirty = true;
+		this.#set.on( "smudge", this );
 	}
 	#ComputePointList() {
 		const temp = new Vector();
@@ -1044,20 +1242,6 @@ class Sector {
 		return walls;
 	}
 
-	on( event, data, data2 ) {
-		if( "function" === typeof data ) {
-			const newEvent = {cb:data,param:data2};
-			if( event in this.#events )
-				this.#events[event].push( newEvent );
-			else
-				this.#events[event] = [newEvent];
-		}
-		else
-			if( event in this.#events ) {
-				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
-			}
-	}
-
 }
 
 //--------------------------------------------
@@ -1154,13 +1338,10 @@ struct all_flagset
 */
 
 class World {
-	#freeLines = [];
-	lines = [];
-	#freeWalls = [];
-   	walls = [];
-	#freeSectors = [];
-	sectors = [];
-	names = [];
+	#lines = new LineSet( this );
+	#walls = new WallSet( this );
+	#sectors = new SectorSet( this );
+	#names = new NameSet( this );
     bodies = [];
     textures= [];
     #firstUndo = null;
@@ -1170,49 +1351,18 @@ class World {
 	
 
 	constructor() {
-	        //this.createSquareSector( 0, 0 );
-	}
-	addWall(w) {
-		
-		return walls.push(w);
+			//this.createSquareSector( 0, 0 );
+			this.#lines.on("update", (line)=>{
 
+			})
+			this.#walls.on("update", (w)=>{
+				
+			})
+			this.#sectors.on("update", (s)=>{
+				
+			})
 	}
-	addWall(w) {
-		if( w.id >= 0 ) throw new Error( "Already allocated" );
-		if( this.#freeWalls.length ) {
-				const spot = this.#freeWalls.pop();// pop is cheaper than shift()
-				this.walls[spot] = w;
-				w.id = spot;
-		}
-		w.id = this.walls.length; // ["walls",this.walls.length]
-		this.walls.push(w);
-	}
-	delWall(w) {
-		if( w.id < 0 ) throw new Error( "Already deleted" );
-		const idx = walls.find( wall=>wall===w );
-		if( idx >= 0 ) {
-			this.#freeWalls.push(idx);
-			w.id = -1;
-		}
-	}
-	addSector(w) {
-		if( w.id >= 0 ) throw new Error( "Already allocated" );
-		if( this.#freeSectors.length ) {
-				const spot = this.#freeSectors.pop();// pop is cheaper than shift()
-				this.sectors[spot] = w;
-				w.id = spot;
-		}
-		w.id = this.sectors.length;
-		this.sectors.push(w);
-	}
-	delSector(w) {
-		if( w.id < 0 ) throw new Error( "Already deleted" );
-		const idx = sectors.find( sector=>sector===w );
-		if( idx >= 0 ) {
-			this.#freeSectors.push(idx);
-			w.id = -1;
-		}
-	}
+
 
 	getTexture( name ) {
 		for( var t of this.textures ) {
@@ -1223,36 +1373,42 @@ class World {
 		this.textures.push( newT );
 		return newT
 	}
-	createSector( x, y ) {
-		const sector = new Sector( this );
+	createSector( wall, x, y ) {
+		const w = this.getWall( { mating:wall } );
+
+		const sector = this.getSector( { firstWall:wall });
 		
+	}
+	getLine( opts ){
+		return this.#lines.get( opts );
+	}
+	getWall( opts ){
+		return this.#walls.get( opts );
+	}
+	getSector( opts ){
+		return this.#sectors.get( opts );
 	}
 	createSquareSector( x, y ) {
 				
-		const wall1 = new Wall( { world:this, start:null, startAtEnd:false, end:null, endAtEnd:false
+		const wall1 = this.getWall( { world:this, start:null, startAtEnd:false, end:null, endAtEnd:false
 						, using:new Ray( new Vector( x-5,0 ), new Vector( 0, 1 ) )  
 								} );
 
-		const sector = new Sector( this );
-		wall1.sector = sector;
-		sector.wall = wall1;
-
+		const sector = this.getSector( { firstWall : wall1,
+								 normal: new Vector(0,0,1 ) } );
 		
-		const wall2 =	new Wall( { world:this, start:wall1, startAtEnd:true, end:null, endAtEnd:false
+		const wall2 =	this.getWall( { world:this, start:wall1, startAtEnd:true, end:null, endAtEnd:false
 						, using:new Ray( new Vector( 0,y+5,0 ), new Vector( 1, 0 ) )
 								} );
 	
-		const wall3 = new Wall( { world:this, start:wall1, startAtEnd:false, end:null, endAtEnd:true
+		const wall3 = this.getWall( { world:this, start:wall1, startAtEnd:false, end:null, endAtEnd:true
 						, using:new Ray( new Vector( 0,y-5,0 ), new Vector( 1, 0 ) )
 								} )
-		new Wall( { world:this, start:wall3, startAtEnd:true, end:wall2, endAtEnd:true
+
+		this.getWall( { world:this, start:wall3, startAtEnd:true, end:wall2, endAtEnd:true
 				, using:new Ray( new Vector( x+5,0 ), new Vector( 0, 1 ) )  
 					} );
 			
-		sector.origin;
-		sector.r.n.set( new Vector(0,1,0 ));
-		//SetPoint( pSector.r.n, VectorConst_Y );
-								
 		
 		const texture = this.getTexture( this.getName( "Default" ) );
 		if( !texture.flags.bColor )
@@ -1263,13 +1419,7 @@ class World {
 	}
 
 	getName(name ) {
-		for( n of this.names ) {
-			if( n.name === name ) return n;
-		}
-		const newn = new Name();
-		this.names.push(newn);
-		newn.name = name;
-		return newn;
+		return this.#names.get({name:name})
 	}
 
 	getSectorAround( o ) {
@@ -1304,6 +1454,17 @@ class World {
 			}
 		}
 	}
+	toJSOX() {
+		const msg = {
+			names : this.#names.toObject(),
+			sectors : this.#names.toObject(),
+			walls : this.#names.toObject(),
+			lines : this.#names.toObject()
+		}
+	
+		return JSOX.stringify( msg );
+	}
+	
 /*
 	POBJECT object;
 
@@ -1311,6 +1472,29 @@ class World {
 	CRITICALSECTION csDeletions;
 	struct all_flagset deletions;
 */
+}
+
+const tmp = null;
+World.fromJSOX = function( field,val ) {
+	if( !field ) {
+		if( this instanceof WorldMsg ){
+			console.log( "Create new world from world message");
+		}
+	}else {
+		tmp[field] = val;
+		return undefined;
+	}
+}
+
+World.toJSOX = function() {
+	return this.toJSOX();
+}
+
+class WorldMsg {
+	names = null;
+	sectors = null;
+	walls = null;
+	lines = null;
 }
 
 /*
@@ -1326,25 +1510,25 @@ World.revive = function(field,val) {
 
 
 const classes = {
-World:World,
-Sector:Sector,
-Wall:Wall,
-Line:Line,
-Name:Name,
-Texture:Texture,
-UndoRecord:UndoRecord,
+	World:World,
+	Sector:Sector,
+	Wall:Wall,
+	Line:Line,
+	Name:Name,
+	Texture:Texture,
+	UndoRecord:UndoRecord,
 
 	setDecoders(jsox) {
-		jsox.fromJSOX( "~Wr", World );
-		jsox.fromJSOX( "~S", Sector );
-		jsox.fromJSOX( "~Wl", Wall );
-		jsox.fromJSOX( "~L", Line );
-		jsox.fromJSOX( "~N", Name );
-		jsox.fromJSOX( "~T", Texture );
+		jsox.fromJSOX( "~Wr", WorldMsg, World.fromJSOX );
+		jsox.fromJSOX( "~S", SectorMsg/*, Sector.fromJSOX*/ );
+		jsox.fromJSOX( "~Wl", WallMsg );
+		jsox.fromJSOX( "~L", LineMsg );
+		jsox.fromJSOX( "~N", NameMsg );
+		jsox.fromJSOX( "~T", TextureMsg );
 		jsox.fromJSOX( "v3", Vector );
 	},
 	setEncoders(jsox) {
-		jsox.toJSOX( "~Wr", World );
+		jsox.toJSOX( "~Wr", World, World.toJSOX );
 		jsox.toJSOX( "~S", Sector );
 		jsox.toJSOX( "~Wl", Wall );
 		jsox.toJSOX( "~L", Line );

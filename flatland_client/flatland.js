@@ -10,7 +10,7 @@ const parser =  JSOX.begin(processMessage);
 classes.setDecoders( JSOX );
 
 var requiredImages = [];
-var maxRequired = 0;
+var maxRequired = 0; // countdown to dispatch next init after all requested images load
 
 const l = {
 	world : null,
@@ -18,13 +18,15 @@ const l = {
 	scale : 0.05, 
 	ws : null, // active connection to server.
 	worldCtx : null, // world editor default context
+	refresh : false,
 	xOfs : 0,
 	yOfs : 0,
 	w : 0,
 	h : 0,
 	cursor : newImage( "cursor.png" ),
-	cursorSpot : {x:5, y:5}
+	cursorSpot : {x:5, y:5},
 };
+
 
 
 function openSocket() {
@@ -36,8 +38,9 @@ function openSocket() {
 		l.ws = ws;
 		l.ws.send( '{op:worlds}' );
 	};
-	ws.onmessage = function (evt) { 
+	ws.onmessage = function (evt) { 				
 		parser.write( evt.data );
+		dispatchChanges();
 	};
 	ws.onclose = function() { 
 		l.ws = null;
@@ -777,6 +780,15 @@ function setupWorld( world ) {
 	canvasRedraw();
 	console.log( "Okay world data:", world.name );
 	return editor;
+}
+
+function dispatchChanges( ) {
+	if( l.refresh ) {
+		canvasRedraw();
+		for( let update of l.updates )
+			update.on( "flush" );
+		l.refresh = false;
+	}
 }
 
 let selector = null;
