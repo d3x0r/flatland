@@ -312,7 +312,7 @@ function canvasRedraw() {
 				square( start.x, start.y, ( mouse.mouseLock.near === check.from )?selectedHotSpot:"rgb(0,0,0)" );
 			}
 			check = check.next(priorend);
-		}while( check != start )
+		}while( check !== start )
 		// and go back to initial start point
 
 

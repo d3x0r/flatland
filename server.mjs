@@ -35,28 +35,31 @@ class GameWorld {
 	get players() {
 		return this.#playerList.length;
 	}	
+	set world(w) { this.#world = Promise.resolve(w) };
 	get world() {
-		this.#world = root.open( this.name ).then(file=>{
-			return file.read().then( data=>{
-				const w = ( data && JSOX.parse( data ) ) || new World();
-				if( !w.sectors.length ){
-					w.createSquareSector( 0, 0 );
-					file.write( w );
-				}
-				w.on( "update", w.send );
-				console.log( "Parsed:", w, data );
-				return w;
-			} )
-		} ).catch( ()=>{
-			const w = new World();
-			w.createSquareSector( 0, 0 );
-				w.on( "update", w.send );
-			return root.open( this.name ).then( file=>{
-				console.log( "writing initial file:", file, w );
+		if( !this.#world ) {
+			this.#world = root.open( this.name ).then(file=>{
+				return file.read().then( data=>{
+					const w = ( data && JSOX.parse( data ) ) || new World();
+					if( !w.sectors.length ){
+						w.createSquareSector( 0, 0 );
+						file.write( w );
+					}
+					w.on( "update", w.send );
+					console.log( "Parsed:", w, data );
+					return w;
+				} )
+			} ).catch( ()=>{
+				const w = new World();
+				w.createSquareSector( 0, 0 );
+					w.on( "update", w.send );
+				return root.open( this.name ).then( file=>{
+					console.log( "writing initial file:", file, w );
 				
-				return file.write( JSOX.stringify( w ) ).then( ()=>w );
+					return file.write( JSOX.stringify( w ) ).then( ()=>w );
+				} );
 			} );
-		} );
+		}
 		console.log( "world should be some sort of promise", this.#world)
 		return this.#world;
 	}	
@@ -169,12 +172,15 @@ server.onconnect( function (ws) {
 		} else if( msg.op === "world" ) {
 				const world = l.worlds.find( w=>w.name === msg.world.name );
 				if( world ) {
+					ws.world = world;
+					console.log( "SO WORLD?", world );
 					world.world.then( (world)=>{
-						ws.world = world;
+						ws.world.world = world;
 						world.on( "update", ws.send, ws );
 
 						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
 						console.log( "Loaded this world, and can now send it.", world );
+						console.log( "SEND WORLD:\n", JSOX.stringify( world ) );
 						ws.send( JSOX.stringify( {op:"world", world:world } ) );
 					} );	
 				}
@@ -219,7 +225,8 @@ server.onconnect( function (ws) {
 								console.log( "File:", newWorld );
 								newWorld.addPlayer( ws );
 								newWorld.world .then( (world)=>{
-									console.log( "AND SEND:", world );
+									setupWorldEvents( newWorld, world );
+									console.log( "AND SEND:", JSOX.stringify(world) );
 									ws.send( JSOX.stringify( {op:"world", world:world } ) );
 								})
 							}
@@ -239,7 +246,8 @@ server.onconnect( function (ws) {
 	ws.onclose( function() {
 	  //console.log( "Remote closed" );
 	  if( pingTimer ) clearTimeout( pingTimer );
-		if( ws.world )
+			console.log( "DELETE PLAYER:", ws.world );
+		if( ws.world && !(ws.world instanceof Promise) )
 			ws.world.delPlayer(ws);
 	} );
 	let pingTimer =null;
@@ -258,5 +266,45 @@ server.onconnect( function (ws) {
 
 }
 
+
+function setupWorldEvents(newWorld, world) {
+	const sendBuffer = [];
+	world.on( "update", ()=>{
+		const buf = sendBuffer.map( JSOX.stringify ).join('');
+		sendBuffer.length = 0;
+		newWorld.players.forEach( ws=>ws.send( buf ) );
+		
+	} );
+	console.trace( "World walls doesn't have events now??", world )
+	world.walls.on( "update", (wall)=>{
+		sendBuffer.push({op:"Wall", wall:wall});
+	} );
+	world.sector.on( "update", (sector)=>{
+		sendBuffer.push({op:"Sector", sector:sector});
+	} );
+	world.lines.on( "update", (line)=>{
+		sendBuffer.push({op:'Line',line:line});
+	} );
+
+	world.walls.on( "create", (wall)=>{
+		sendBuffer.push({ op:'wall', wall:wall});
+	} );
+	world.sector.on( "create", (sector)=>{
+		sendBuffer.push({ op:'sector', sector:sector});
+	} );
+	world.lines.on( "create", (line)=>{
+		sendBuffer.push({ op:'line', line:line});
+	} );
+
+	world.walls.on( "destroy", (wall)=>{
+		sendBuffer.push({ op:'destroyWall',id:wall.id });
+	} );
+	world.sector.on( "destroy", (sector)=>{
+		sendBuffer.push({ op:'destroySector',id:sector.id });
+	} );
+	world.lines.on( "destroy", (line)=>{
+		sendBuffer.push({ op:'destroyLine',id:line.id });
+	} );
+}
 
 openServer();
