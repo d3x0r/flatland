@@ -1,5 +1,4 @@
 "use strict";
-
 // jsox.js
 // JSOX JavaScript Object eXchange. Inherits human features of comments
 // and extended formatting from JSON6; adds macros, big number and date
@@ -9,11 +8,13 @@
 // which is based off of https://github.com/d3x0r/sack  ./src/netlib/html5.websocket/json6_parser.c
 //
 var exports = exports || {};
-//const util = require('util'); // debug inspect.
+////const util = require('util'); // debug inspect.
+//import util from 'util'; 
 
 const _JSON=JSON; // in case someone does something like JSON=JSOX; we still need a primitive _JSON for internal stringification
 const JSOX = exports;
 JSOX.version = "1.2.105";
+
 //function privateizeEverything() {
 //const _DEBUG_LL = false;
 //const _DEBUG_PARSING = false;
@@ -119,7 +120,6 @@ function dropContext(ctx) {
 /*
 	console.log( "Dropping context:", ctx );
 	ctx.elements = null;
-	ctx.element_array = null;
 	ctx.name = null;
 	ctx.valueType = VALUE_UNSET;
 	ctx.arrayType = -1;
@@ -171,7 +171,6 @@ JSOX.begin = function( cb, reviver ) {
 		result = null,
 		rootObject = null,
 		elements = undefined,
-		//element_array = [],
 		context_stack = {
 			first : null,
 			last : null,
@@ -203,7 +202,7 @@ JSOX.begin = function( cb, reviver ) {
 				return result.node;
 			},
 			length : 0,
-			/*dump() {
+			/*dump() {  // //_DEBUG_CONTEXT_STACK
 				console.log( "STACK LENGTH:", this.length );
 				let cur= this.first;
 				let level = 0;
@@ -212,7 +211,6 @@ JSOX.begin = function( cb, reviver ) {
 					level++;
 					cur = cur.next;
 				}
-
 			}*/
 		},
 		classes = [],  // class templates that have been defined.
@@ -315,7 +313,6 @@ JSOX.begin = function( cb, reviver ) {
 			context_stack.length = 0;
 			context_stack.save = inQueue.first;
 			context_stack.first = context_stack.last = null;//= [];
-			//element_array = [];
 			elements = undefined;
 			parse_context = CONTEXT_UNKNOWN;
 			classes = [];
@@ -454,22 +451,27 @@ JSOX.begin = function( cb, reviver ) {
 						//let ctx = context_stack.first;
 						let lvl;
 						//console.log( "Resolving Reference...", context_stack.length );
-						//console.log( "--elements and array", elements, element_array );
+						//console.log( "--elements and array", elements );
 						
-						for( lvl = 0; lvl < val.contains.length; lvl++ ) {
+						const pathlen = val.contains.length;
+						for( lvl = 0; lvl < pathlen; lvl++ ) {
 							const idx = val.contains[lvl];
-							//_DEBUG_PARSING_DETAILS && console.log( "Looking up idx:", idx, "in", obj );
+							//_DEBUG_REFERENCES && console.log( "Looking up idx:", idx, "of", val.contains, "in", obj );
 							let nextObj = obj[idx];
 
-							//_DEBUG_PARSING_DETAILS  && console.log( "Resolve path:", lvl, idx,"in", obj, context_stack.length, val.contains.toString() );
+							//_DEBUG_REFERENCES  && console.log( "Resolve path:", lvl, idx,"in", obj, context_stack.length, val.contains.toString() );
 							//_DEBUG_REFERENCES && console.log( "NEXT OBJECT:", nextObj );
 							if( !nextObj ) {
 								{
 									let ctx = context_stack.first;
 									let p = 0;
 									//_DEBUG_PARSING_CONTEXT && context_stack.dump();
-									while( ctx && p < val.contains.length && p < context_stack.length ) {
+									while( ctx && p < pathlen && p < context_stack.length ) {
 										const thisKey = val.contains[p];
+										if( thisKey in obj ) {
+											//console.log( "don't need to be in the context stack anymore------------------------------")
+											break;
+										}
 										//_DEBUG_REFERENCES && console.log( "Checking context:", obj, "p=",p, "key=",thisKey, "ctx=",util.inspect(ctx), "ctxNext=",ctx.next);
 										//console.dir(ctx, { depth: null })
 										if( ctx.next ) {
@@ -482,8 +484,10 @@ JSOX.begin = function( cb, reviver ) {
 												if( asdf && thisKey >= asdf.length ) {
 													//_DEBUG_REFERENCES && console.log( "AT ", p, actualObject.length, val.contains.length );
 													if( p === (actualObject.length-1) ) {
-														//_DEBUG_REFERENCES && console.log( "This is actually at the current object so use that" );
+														////_DEBUG_REFERENCES && 
+															console.log( "This is actually at the current object so use that" );
 														nextObj = elements;
+														
 														break;
 													}
 													else {
@@ -497,12 +501,14 @@ JSOX.begin = function( cb, reviver ) {
 														}
 														//_DEBUG_REFERENCES && console.log( "FAILING HERE", ctx.next, ctx.next.next, elements );
 														nextObj = elements;
+														p++; // make sure to exit.
+
 														break;
 														//obj = next
 													}
 												}
 											} else {
-												//_DEBUG_REFERENCES && console.log( "field AT ", p, val.contains.length );
+												//_DEBUG_REFERENCES && console.log( "field AT index", p,"of", val.contains.length );
 												if( thisKey !== ctx.next.node.name ){
 													//_DEBUG_REFERENCES && console.log( "Expect:", thisKey, ctx.next.node.name, ctx.next.node.elements );
 													nextObj = ( ctx.next.node.elements[thisKey] );
@@ -510,7 +516,7 @@ JSOX.begin = function( cb, reviver ) {
 													lvl = p;
 													break;
 												} else {
-													//_DEBUG_REFERENCES && console.log( "Updating next object(NEW) to", ctx.next.node)
+													//_DEBUG_REFERENCES && console.log( "Updating next object(NEW) to", ctx.next.node, elements, thisKey)
 													if( ctx.next.node.valueType === VALUE_ARRAY ){
 														//_DEBUG_REFERENCES && console.log( "Using the array element of that")
 														nextObj = ctx.next.node.elements_array;
@@ -530,21 +536,20 @@ JSOX.begin = function( cb, reviver ) {
 											//}
 										} else {
 											nextObj = nextObj[thisKey];
-											//console.log( "last context:", element_array
-											//		, elements
-											//		, ctx );
 										}
 										//_DEBUG_REFERENCES && console.log( "Doing next context??", p, context_stack.length, val.contains.length );
 										ctx = ctx.next;
 										p++;
 									}
-									//_DEBUG_REFERENCES && console.log( "Done with context stack..." );
-									lvl = p;
+									//_DEBUG_REFERENCES && console.log( "Done with context stack...level", lvl, "p", p );
+									if( p < pathlen )
+										lvl = p-1;
+									else lvl = p;
 								}
 								//_DEBUG_REFERENCES && console.log( "End of processing level:", lvl );
 							}
 							if( !nextObj ) {
-								throw new Error( "Path did not resolve poperly." +  val.contains + " at " + idx + '(' + lvl + ')' );
+								throw new Error( "Path did not resolve properly:" +  val.contains + " at " + idx + '(' + lvl + ')' );
 							}
 							obj = nextObj;
 						}
@@ -593,6 +598,7 @@ JSOX.begin = function( cb, reviver ) {
 			function objectPush() {
 				if( arrayType === -3 && val.value_type === VALUE_ARRAY ) {
 					//console.log( "Array has already been set in object." );
+					//elements[val.name] = val.contains;
 					RESET_VAL();
 					arrayType = -1;
 					return;
@@ -611,7 +617,7 @@ JSOX.begin = function( cb, reviver ) {
 					if( value ) elements[val.name] = value;
 					//elements = new current_proto.protoCon( elements );
 				}else {
-				        //_DEBUG_PARSING_DETAILS && console.log( "Default no special class reviver" );
+				        //_DEBUG_PARSING_DETAILS && console.log( "Default no special class reviver", val.name, value );
 					elements[val.name] = value;
 				}
 				//_DEBUG_PARSING_DETAILS && console.log( "Updated value:", current_class_field, val.name, elements[val.name] );
@@ -1046,7 +1052,6 @@ JSOX.begin = function( cb, reviver ) {
 						|| parse_context == CONTEXT_CLASS_VALUE ) {
 					if( word != WORD_POS_RESET || val.value_type == VALUE_STRING ) {
 						if( protoDef && protoDef.protoDef ) {
-							val.className = val.string;
 							// need to collect the object,
 							tmpobj = new protoDef.protoDef.protoCon();
 						} else {
@@ -1061,11 +1066,12 @@ JSOX.begin = function( cb, reviver ) {
 														{ protoCon:privateProto.prototype.constructor
 														, cb: null }
 													   );
-								elements = new privateProto();
+								tmpobj = new privateProto();
 							}
-							else
+							else {
 								nextMode = CONTEXT_CLASS_VALUE;
-							tmpobj = {};
+								tmpobj = {};
+							}
 						}
 						//nextMode = CONTEXT_CLASS_VALUE;
 						word = WORD_POS_RESET;
@@ -1098,7 +1104,7 @@ JSOX.begin = function( cb, reviver ) {
 						val.name = current_class.fields[current_class_field++];
 						//_DEBUG_PARSING_DETAILS && console.log( "B Stepping current class field:", val, current_class_field, val.name );
 					}
-					//_DEBUG_PARSING_DETAILS && console.log( "Setting element:", val.name, val );
+					//_DEBUG_PARSING_DETAILS && console.log( "Setting element:", val.name, tmpobj );
 					elements[val.name] = tmpobj;
 				}
 
@@ -1111,7 +1117,7 @@ JSOX.begin = function( cb, reviver ) {
 				old_context.current_class = current_class;
 				old_context.current_class_field = current_class_field;
 				old_context.valueType = val.value_type;
-				old_context.arrayType = arrayType==-1?-3:arrayType; // pop that we don't want to have this value re-pushed.
+				old_context.arrayType = arrayType; // pop that we don't want to have this value re-pushed.
 				old_context.className = val.className;
 				//arrayType = -3; // this doesn't matter, it's an object state, and a new array will reset to -1
 				val.className = null;
@@ -1188,9 +1194,14 @@ JSOX.begin = function( cb, reviver ) {
 						if( current_proto && current_proto.protoDef ) {
 							//_DEBUG_PARSING_DETAILS && console.log( "SOMETHING SHOULD HAVE BEEN REPLACED HERE??", current_proto );
 							//_DEBUG_PARSING_DETAILS && console.log( "(need to do fromprototoypes here) object:", val, value );
-							tmparr = current_proto.protoDef.cb.call( elements, val.name, tmparr );
+							if( current_proto.protoDef.cb ){
+								const newarr = current_proto.protoDef.cb.call( elements, val.name, tmparr );
+								if( newarr !== undefined ) tmparr = elements[val.name] = newarr;
+								else console.log( "Warning: Received undefined for an array; keeping original array, not setting field" );
+							}else
+								elements[val.name] = tmparr;
 						}
-						if( tmparr )
+						else
 							elements[val.name] = tmparr;
 					}
 					old_context.context = parse_context;
@@ -2566,7 +2577,7 @@ JSOX.stringifier = function() {
 					if( v ) return "ref"+v;
 				}
 
-				let newValue = toJSOX.apply(value);
+				let newValue = toJSOX.call(value,stringifier);
 				//_DEBUG_STRINGIFY && console.log( "translated ", newValue, value );
 				value = newValue;
 				gap = mind;
@@ -2849,8 +2860,6 @@ const nonIdent =
 ].map( row=>{ return{ firstChar : row[0], lastChar: row[1], bits : row[2] }; } );
 
 
-//}
-
-//privateizeEverything();
+//} privateizeEverything();
 export {JSOX}
 
