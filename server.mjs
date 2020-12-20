@@ -67,7 +67,7 @@ class GameWorld {
 		this.#playerList.push(ws);
 	}
 	delPlayer(ws) {
-		var idx = this.#playerList.find( p=>w===ws );
+		var idx = this.#playerList.find( p=>p===ws );
 		if( idx >= 0 )
 			this.#playerList.slice(idx,1);
 		else console.log( "Failed to find player to remove." );
@@ -231,9 +231,8 @@ server.onconnect( function (ws) {
 								console.log( "File:", newWorld );
 								newWorld.addPlayer( ws );
 								newWorld.world .then( (world)=>{
-                          	//newWorldws.world = newWorld;
+                                                                	ws.World = world;
 									setupWorldEvents( newWorld, world );
-									console.log( "AND SEND:", JSOX.stringify(world) );
 									ws.send( JSOX.stringify( {op:"world", world:world } ) );
 								})
 							}
