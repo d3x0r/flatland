@@ -52,7 +52,7 @@ class GameWorld {
 			} ).catch( ()=>{
 				const w = new World();
 				w.createSquareSector( 0, 0 );
-					w.on( "update", w.send );
+				w.on( "update", w.send );
 				return root.open( this.name ).then( file=>{
 					console.log( "writing initial file:", file, w );
 				
@@ -158,6 +158,7 @@ server.onaccept( function ( ws ) {
 } );
 
 server.onconnect( function (ws) {
+   ws.World = null;
 	ws.world = null; // extend socket.
 	ws.lastMessage = Date.now();
 	//console.log( "Connect:", ws );
@@ -170,24 +171,29 @@ server.onconnect( function (ws) {
 		if( msg.op === "worlds" ) {
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
 		} else if( msg.op === "world" ) {
-				const world = l.worlds.find( w=>w.name === msg.world.name );
-				if( world ) {
-					ws.world = world;
-					console.log( "SO WORLD?", world );
-					world.world.then( (world)=>{
+				const newWorld = l.worlds.find( w=>w.name === msg.world.name );
+				if( newWorld ) {
+					ws.world = newWorld;
+					console.log( "SO WORLD?", newWorld );
+              	newWorld.addPlayer( ws );
+
+					newWorld.world.then( (world)=>{
+						ws.World = world;
 						ws.world.world = world;
 						world.on( "update", ws.send, ws );
 
 						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
 						console.log( "Loaded this world, and can now send it.", world );
 						console.log( "SEND WORLD:\n", JSOX.stringify( world ) );
+						setupWorldEvents( newWorld, world );
 						ws.send( JSOX.stringify( {op:"world", world:world } ) );
 					} );	
 				}
 		} else if( msg.op === "move" ) {
 			console.log( "Server should use this to update also...");
 			if( msg.t === 'S' ) {
-				ws.world.moveSector( msg.sector, msg.x, msg.y );
+		console.log( "ws:", ws, ws.world );
+				ws.World.moveSector( msg.sector, msg.x, msg.y );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
@@ -225,6 +231,7 @@ server.onconnect( function (ws) {
 								console.log( "File:", newWorld );
 								newWorld.addPlayer( ws );
 								newWorld.world .then( (world)=>{
+                          	//newWorldws.world = newWorld;
 									setupWorldEvents( newWorld, world );
 									console.log( "AND SEND:", JSOX.stringify(world) );
 									ws.send( JSOX.stringify( {op:"world", world:world } ) );
@@ -272,37 +279,36 @@ function setupWorldEvents(newWorld, world) {
 	world.on( "update", ()=>{
 		const buf = sendBuffer.map( JSOX.stringify ).join('');
 		sendBuffer.length = 0;
-		newWorld.players.forEach( ws=>ws.send( buf ) );
-		
+		newWorld.send( null, buf );
 	} );
 	console.trace( "World walls doesn't have events now??", world )
-	world.walls.on( "update", (wall)=>{
+	world.wallSet.on( "update", (wall)=>{
 		sendBuffer.push({op:"Wall", wall:wall});
 	} );
-	world.sector.on( "update", (sector)=>{
+	world.sectorSet.on( "update", (sector)=>{
 		sendBuffer.push({op:"Sector", sector:sector});
 	} );
-	world.lines.on( "update", (line)=>{
+	world.lineSet.on( "update", (line)=>{
 		sendBuffer.push({op:'Line',line:line});
 	} );
 
-	world.walls.on( "create", (wall)=>{
+	world.wallSet.on( "create", (wall)=>{
 		sendBuffer.push({ op:'wall', wall:wall});
 	} );
-	world.sector.on( "create", (sector)=>{
+	world.sectorSet.on( "create", (sector)=>{
 		sendBuffer.push({ op:'sector', sector:sector});
 	} );
-	world.lines.on( "create", (line)=>{
+	world.lineSet.on( "create", (line)=>{
 		sendBuffer.push({ op:'line', line:line});
 	} );
 
-	world.walls.on( "destroy", (wall)=>{
+	world.wallSet.on( "destroy", (wall)=>{
 		sendBuffer.push({ op:'destroyWall',id:wall.id });
 	} );
-	world.sector.on( "destroy", (sector)=>{
+	world.sectorSet.on( "destroy", (sector)=>{
 		sendBuffer.push({ op:'destroySector',id:sector.id });
 	} );
-	world.lines.on( "destroy", (line)=>{
+	world.lineSet.on( "destroy", (line)=>{
 		sendBuffer.push({ op:'destroyLine',id:line.id });
 	} );
 }

@@ -1517,12 +1517,16 @@ struct all_flagset
 
 class World {
 	#lines = new LineSet( this );
+	get lineSet() { return this.#walls }
 	get lines() { return this.#lines.array }
 	#walls = new WallSet( this );
+	get wallSet() { return this.#walls }
 	get walls() { return this.#walls.array }
 	#sectors = new SectorSet( this );
+	get sectorSet() { return this.#walls }
 	get sectors() { return this.#sectors.array }
 	#names = new NameSet( this );
+	get nameSet() { return this.#walls }
 	get names() { return this.#names.array }
 	bodies = [];
 	textures= [];
