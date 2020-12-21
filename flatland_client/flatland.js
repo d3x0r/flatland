@@ -60,20 +60,51 @@ function openSocket() {
 
 function selectWorld( worldList ){
 	const selector = new popups.create( "Select World", app );
-	for( let world of worldList ) {
+	const rows = [];
+
+	selector.addWorld = addWorld;
+	selector.delWorld = delWorld;
+
+	function delWorld( world ) {
+		for( let row of rows ) {
+			if( row.world.name === world.name ) {
+				console.log( "Delete world?" );
+				row.row.remove();
+				break;
+			}
+		}
+	}
+	function addWorld( world ) {
 		const row = document.createElement( "div" );
+		rows.push( {row:row, world:world});
 		row.style.display = "table-row";
 		const name = document.createElement( "span" );
 		name.textContent = world.name;
 		name.style.display = "table-cell";
 		row.appendChild( name );
+
+		const delWorld = popups.makeButton( row, "X", ((world)=>()=>{
+			row.remove();
+			//selector.deleteItem( row );
+			l.ws.send( JSOX.stringify( {op:'deleteWorld', world:world, user:localStorage.getItem( "userId" ) || "AllowMe" } ) );
+			//selector.hide();
+		})(world) );
+		delWorld.style.display = "table-cell";
+		delWorld.style.float = "right";
+
+
 		const open = popups.makeButton( row, "Open", ((world)=>()=>{
 			l.ws.send( JSOX.stringify( {op:'world', world:world } ) );
 			selector.hide();
 		})(world) );
 		open.style.display = "table-cell";
 		open.style.float = "right";
+
 		selector.appendChild( row );
+
+	}
+	for( let world of worldList ) {
+		addWorld( world );
 	}
 
 	{
@@ -786,9 +817,9 @@ function setupWorld( world ) {
 function dispatchChanges( ) {
 	if( l.refresh ) {
 		canvasRedraw();
-		for( let update of l.updates )
-			update.on( "flush" );
-		l.updates.length = 0;
+		//for( let update of l.updates )
+		//	update.on( "flush" );
+		//l.updates.length = 0;
 		l.refresh = false;
 	}
 }
@@ -806,11 +837,16 @@ function processMessage( msg ) {
 	} else if( msg.op === "world" ) {
 		console.log( "SETUP" );
 		l.editor = setupWorld( msg.world );
-
+	} else if( msg.op === "deleteWorld" ) {
+		selector.delWorld( msg.world );
+	} else if( msg.op === "newWorld" ) {
+		console.log( "add World Live" );
+		l.editor = selector.addWorld( msg.world );
 	} else if( msg.op === "Line" ) {
 		l.world.lines[msg.id].set(JSOX.parse(msg.data));
 	} else if( msg.op === "Sector" ) {
 		l.world.sectors[msg.id].set(JSOX.parse(msg.data));
+		l.refresh = true;
 	} else if( msg.op === "wall" ) {
 		l.world.walls[msg.id].set(JSOX.parse(msg.data));
 	} else if( msg.op === "create" ) {

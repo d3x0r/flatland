@@ -19,6 +19,7 @@ let root = null;
 
 const l = {
 	worlds : [],
+	loading : [], // loading (on load menu)
 }
 
 class GameWorld {
@@ -45,14 +46,14 @@ class GameWorld {
 						w.createSquareSector( 0, 0 );
 						file.write( w );
 					}
-					w.on( "update", w.send );
+					setupWorldEvents( this, w );
 					console.log( "Parsed:", w, data );
 					return w;
 				} )
 			} ).catch( ()=>{
 				const w = new World();
 				w.createSquareSector( 0, 0 );
-				w.on( "update", w.send );
+				setupWorldEvents( this, w );
 				return root.open( this.name ).then( file=>{
 					console.log( "writing initial file:", file, w );
 				
@@ -170,30 +171,40 @@ server.onconnect( function (ws) {
         //ws.send( msg );
 		if( msg.op === "worlds" ) {
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
+			l.loading.push(ws);
+		} else if( msg.op === "deleteWorld" ) {
+			const oldIdx = l.worlds.findIndex( w=>w.name === msg.world.name );
+			console.log( "if user key matches creator...", msg.user, oldIdx, msg );
+			if( oldIdx >= 0 ) {
+				for( let loading of l.loading ) {
+					console.log( "Sending delete world:",l.worlds[oldIdx])
+					loading.send( JSOX.stringify( {op:"deleteWorld", world:l.worlds[oldIdx] } ) );
+				}
+				l.worlds.splice( oldIdx, 1 );
+			}
 		} else if( msg.op === "world" ) {
 				const newWorld = l.worlds.find( w=>w.name === msg.world.name );
+				const loadingIdx = l.loading.findIndex( w=>w===ws );
+				if( loadingIdx >= 0 )
+					l.loading.splice( loadingIdx, 1 );
 				if( newWorld ) {
 					ws.world = newWorld;
-					console.log( "SO WORLD?", newWorld );
-              	newWorld.addPlayer( ws );
+					//console.log( "SO WORLD?", newWorld );
+					newWorld.addPlayer( ws );
 
 					newWorld.world.then( (world)=>{
 						ws.World = world;
 						ws.world.world = world;
-						world.on( "update", ws.send, ws );
-
 						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
 						console.log( "Loaded this world, and can now send it.", world );
 						console.log( "SEND WORLD:\n", JSOX.stringify( world ) );
-						setupWorldEvents( newWorld, world );
 						ws.send( JSOX.stringify( {op:"world", world:world } ) );
 					} );	
 				}
 		} else if( msg.op === "move" ) {
 			console.log( "Server should use this to update also...");
 			if( msg.t === 'S' ) {
-		console.log( "ws:", ws, ws.world );
-				ws.World.moveSector( msg.sector, msg.x, msg.y );
+				ws.World.moveSector( msg.id, msg.x, msg.y );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
@@ -228,11 +239,17 @@ server.onconnect( function (ws) {
 							}else {
 								const newWorld = new GameWorld(msg.name);
 								l.worlds.push( newWorld );
+								const loadingIdx = l.loading.findIndex( w=>w===ws );
+								if( loadingIdx >= 0 )
+									l.loading.splice( loadingIdx, 1 );
+								console.log( "CREATING WORLD TELL OTHERS?", l.loading );
+								for( let loading of l.loading ) {
+									loading.send( JSOX.stringify( {op:"newWorld", world:newWorld } ) );
+								}
 								console.log( "File:", newWorld );
 								newWorld.addPlayer( ws );
 								newWorld.world .then( (world)=>{
-                                                                	ws.World = world;
-									setupWorldEvents( newWorld, world );
+				                                   	ws.World = world;
 									ws.send( JSOX.stringify( {op:"world", world:world } ) );
 								})
 							}
@@ -251,8 +268,12 @@ server.onconnect( function (ws) {
         } );
 	ws.onclose( function() {
 	  //console.log( "Remote closed" );
-	  if( pingTimer ) clearTimeout( pingTimer );
-			console.log( "DELETE PLAYER:", ws.world );
+		const loadingIdx = l.loading.findIndex( w=>w===ws );
+		if( loadingIdx >= 0 )
+			l.loading.splice( loadingIdx, 1 );
+		if( pingTimer ) clearTimeout( pingTimer );
+		  
+		console.log( "DELETE PLAYER:", ws.world );
 		if( ws.world && !(ws.world instanceof Promise) )
 			ws.world.delPlayer(ws);
 	} );
@@ -276,29 +297,30 @@ server.onconnect( function (ws) {
 function setupWorldEvents(newWorld, world) {
 	const sendBuffer = [];
 	world.on( "update", ()=>{
-		const buf = sendBuffer.map( JSOX.stringify ).join('');
+		const buf = sendBuffer.map( (b)=>JSOX.stringify(b) ).join('');
+		console.log( "--- WORLD UPDATE flush pending changes to all ----", buf );
 		sendBuffer.length = 0;
 		newWorld.send( null, buf );
 	} );
 	console.trace( "World walls doesn't have events now??", world )
 	world.wallSet.on( "update", (wall)=>{
-		sendBuffer.push({op:"Wall", wall:wall});
+		sendBuffer.push({op:"Wall", id:wall.id,data:wall.toJSOX() });
 	} );
 	world.sectorSet.on( "update", (sector)=>{
-		sendBuffer.push({op:"Sector", sector:sector});
+		sendBuffer.push({op:"Sector", id:sector.id,data:sector.toJSOX()});
 	} );
 	world.lineSet.on( "update", (line)=>{
-		sendBuffer.push({op:'Line',line:line});
+		sendBuffer.push({op:'Line',id:line.id,data:line.toJSOX() });
 	} );
 
 	world.wallSet.on( "create", (wall)=>{
-		sendBuffer.push({ op:'wall', wall:wall});
+		sendBuffer.push({ op:'wall', id:line.id,wall:wall});
 	} );
 	world.sectorSet.on( "create", (sector)=>{
-		sendBuffer.push({ op:'sector', sector:sector});
+		sendBuffer.push({ op:'sector', id:line.id,sector:sector});
 	} );
 	world.lineSet.on( "create", (line)=>{
-		sendBuffer.push({ op:'line', line:line});
+		sendBuffer.push({ op:'line',id:line.id, line:line});
 	} );
 
 	world.wallSet.on( "destroy", (wall)=>{
