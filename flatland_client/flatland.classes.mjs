@@ -94,7 +94,7 @@ class Pool {
 
 	on( event, data, data2 ) {
 		if( "function" === typeof data ) {
-			console.log( "REGSITERING EVENT IN");
+			//console.log( "REGSITERING EVENT IN", event );
 			const newEvent = {cb:data,param:data2};
 			if( event in this.#events )
 				this.#events[event].push( newEvent );
@@ -102,7 +102,7 @@ class Pool {
 				this.#events[event] = [newEvent];
 		}
 		else{
-			console.log( "USING EVENT IN");
+			//console.log( "USING EVENT", event );
 			
 			if( event in this.#events ) {
 				let result = null;
@@ -111,7 +111,7 @@ class Pool {
 					if( result ) result = [result].push(zz);
 					else result = zz;
 				} );
-				console.log( "on event result:", result );
+				//console.log( "on event result:", result );
 				return result;
 			}
 		}
@@ -136,7 +136,7 @@ class PoolMember {
 		}
 	}
 	on( name,val ) {
-		return this.#set.on(name,val);
+		return this.#set.on(name,this,val);
 	}
 	get parent() {
 		return this.#set.parent;
@@ -201,19 +201,20 @@ class TextureSet extends Pool {
 }
 
 class TextureMsg {
+	texture = localParseState.world.getTexture();
 	name = null;
 	flags = null;
 }
 function buildTexturefromJSOX( field,val ) {
-	if( !field ) return localParseState.world.getTexture( this );
+	if( !field ) return this.texture;
 	console.log( "revive texture ield:", field );
 	switch( field ) {
 	case "flags":
-		return val;
-		break;
+		return this.texture.flags;
+		//return val;
 	case "name":
+		this.texture.name = val;
 		return val;
-		break;
 	} 
 }
 
@@ -259,7 +260,9 @@ class Vector {
 					this.z = c;
 			}
 		}
-	set(v) { this.x = v.x; this.y = v.y;this.z = v.z; return this;}
+	set(v) { 
+		this.x = v.x; this.y = v.y;this.z = v.z;
+		return this;}
 	sum(v ) {
 		this.x += v.x;
 		this.y += v.y;
@@ -301,6 +304,11 @@ class Ray {
 			this.o = o;
 			this.n = n;
 		}
+	}
+	set(opts ) {
+		this.o.set( opts.o );
+		this.n.set( opts.n );
+		return this;
 	}
 }
 
@@ -431,19 +439,26 @@ class Line extends PoolMember{
 	}
 	set( opts ) {
 		if( opts.line && opts.line instanceof Line ){
-			this.r.o.set( opts.ray.r.o );
-			this.r.n.set( opts.ray.r.n );
+			this.r.set( opts.ray.r );
 			this.from = opts.ray.from;
 			this.to = opts.ray.to;
-			return;
+			return this;
+		} 
+
+		if( "id" in opts ) { 
+			this.r.set( opts.r );
+			this.from = opts.f;
+			this.to = opts.t;
+		}else {
+			this.r = opts.ray;
+			if( "number" === typeof opts.from ) {
+				this.from = opts.from;
+				this.to = opts.to;
+			}
+			this.#flags.updated = true;
+			this.on( "update", this );
 		}
-		this.r = opts.ray;
-		if( "number" === typeof opts.from ) {
-			this.from = opts.from;
-			this.to = opts.to;
-		}
-		this.#flags.updated = true;
-		this.on( "update", this );
+		return this;
 	}
 
 	get ptFrom() {
@@ -453,8 +468,7 @@ class Line extends PoolMember{
 		return this.#pTo.addScaled( this.r.o, this.r.n, this.to );
 	}
 	setFromm(l){
-		this.r.o.set( l.r.o );
-		this.r.n.set( l.r.n );
+		this.r.set( l.r );
 		this.from = l.from;
 		this.to = l.to;
 	}
@@ -644,6 +658,8 @@ class Wall extends PoolMember{
 			this.start = opts.start;
 			this.start_at_end = opts.startAtEnd;
 			//console.log( "Do intersect line 1 start side.." );
+			this.#from = this.line.ptFrom;
+			this.#to = this.line.ptTo;
 			this.line.intersect( false, this.start.line, opts.startAtEnd );
 			//console.log( "Intersected lines:", this.line, this.start.line );
 		}
@@ -672,8 +688,8 @@ class Wall extends PoolMember{
 
 	update() {
 		if( this.#flags.dirty ) {
-			this.#from.addScaled( this.line.r.o, this.line.r.n, this.line.from );
-			this.#to.addScaled( this.line.r.o, this.line.r.n, this.line.to );
+			this.#from = this.line.ptFrom;
+			this.#to = this.line.ptTo;
 			this.#flags.dirty = false;
 		}
 	}
@@ -689,7 +705,8 @@ class Wall extends PoolMember{
 	}
 	get from() {
 		if( this.#flags.dirty ) this.update();
-		return this.#from;
+
+		return this.line.ptFrom;
 	}
 	get dirty() {
 		return this.#flags.dirty;
@@ -699,7 +716,7 @@ class Wall extends PoolMember{
 	}
 	get to() {
 		if( this.#flags.dirty ) this.update();
-		return this.#to;
+		return this.line.ptTo;
 	}
 	set sector(val) {
 		this.#sector = val;
@@ -731,7 +748,8 @@ class Wall extends PoolMember{
 		
 		const pWall = this;
 		function UpdateResult(r) {				 
-			if( !r ) Log1( "Failing update at : %d", __LINE__ ); 
+			if( !r ) console.log( "Failing update at : %d", __LINE__ ); 
+			//console.log( "posting update for wall...", wall );
 			if( r )
 				if( !walls.find( w=>w===wall )) walls.push( wall );
 			
@@ -820,24 +838,7 @@ class Wall extends PoolMember{
 						{
 							let pOtherWall = pStart.start;
 							let plsOther = pOtherWall.line;
-							/*
-							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
-							, __LINE__
-							, ptOther[0]
-							, ptOther[1]
-							, ptOther[2]
-							, ptStart[0]
-							, ptStart[1]
-							, ptStart[2] );
-							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
-							, __LINE__
-							, RCOORDBITS(ptOther[0])
-							, RCOORDBITS(ptOther[1])
-							, RCOORDBITS(ptOther[2])
-							, RCOORDBITS(ptStart[0])
-							, RCOORDBITS(ptStart[1])
-							, RCOORDBITS(ptStart[2]) );
-							*/
+
 							if( pStart.start_at_end )
 								ptOther = plsOther.ptTo;
 							else
@@ -877,24 +878,6 @@ class Wall extends PoolMember{
 						{
 							let pOtherWall = pStart.end;
 							let plsOther = pOtherWall.line;
-							/*
-							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
-							, __LINE__
-							, ptOther[0]
-							, ptOther[1]
-							, ptOther[2]
-							, ptStart[0]
-							, ptStart[1]
-							, ptStart[2] );
-							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
-							, __LINE__
-							, RCOORDBITS(ptOther[0])
-							, RCOORDBITS(ptOther[1])
-							, RCOORDBITS(ptOther[2])
-							, RCOORDBITS(ptStart[0])
-							, RCOORDBITS(ptStart[1])
-							, RCOORDBITS(ptStart[2]) );
-							*/
 							if( pStart.end_at_end )
 								ptOther = plsOther.to;
 							else
@@ -939,24 +922,7 @@ class Wall extends PoolMember{
 						{
 							let pOtherWall = pEnd.start;
 							let plsOther = pOtherWall.line;
-							/*
-							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
-							, __LINE__
-							, ptOther[0]
-							, ptOther[1]
-							, ptOther[2]
-							, ptEnd[0]
-							, ptEnd[1]
-							, ptEnd[2] );
-							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
-							, __LINE__
-							, RCOORDBITS(ptOther[0])
-							, RCOORDBITS(ptOther[1])
-							, RCOORDBITS(ptOther[2])
-							, RCOORDBITS(ptEnd[0])
-							, RCOORDBITS(ptEnd[1])
-							, RCOORDBITS(ptEnd[2]) );
-							*/
+
 							if( pEnd.start_at_end )
 								ptOther = plsOther.ptTo;
 							else
@@ -997,24 +963,7 @@ class Wall extends PoolMember{
 						{
 							let pOtherWall =  pEnd.end;
 							let plsOther = pOtherWall.line;
-							/*
-							Log7( "Line Different %d: <%g,%g,%g> <%g,%g,%g> "
-							, __LINE__
-							, ptOther[0]
-							, ptOther[1]
-							, ptOther[2]
-							, ptEnd[0]
-							, ptEnd[1]
-							, ptEnd[2] );
-							Log7( "Line Different %d: <%08x,%08x,%08x> <%08x,%08x,%08x> "
-							, __LINE__
-							, RCOORDBITS(ptOther[0])
-							, RCOORDBITS(ptOther[1])
-							, RCOORDBITS(ptOther[2])
-							, RCOORDBITS(ptEnd[0])
-							, RCOORDBITS(ptEnd[1])
-							, RCOORDBITS(ptEnd[2]) );
-							*/
+
 							if( pEnd.end_at_end )
 								ptOther = plsOther.ptTo;
 							else
@@ -1234,7 +1183,6 @@ class Sector extends PoolMember{
 		bOpenShape : false, // should be drawn with lines not filled polygons (line/curve)
 		dirty : false,
 	};
-	id = -1;
 	name = null;
 	wall = null;
 	r = new Ray();
@@ -1247,6 +1195,13 @@ class Sector extends PoolMember{
 	   #set = null;
 
 	set(opts ) {
+		if( "id" in opts ) {
+			this.r.set( opts.r );
+			if( this.name === null ) this.name = null;
+			else this.name = this.parent.names[this.name];
+			this.#flags.dirty = true;
+			return;
+		}
 		if( "undefined" !== typeof opts.normal ) {
 			this.r.n.x = opts.normal.x;
 			this.r.n.y = opts.normal.y;
@@ -1257,13 +1212,7 @@ class Sector extends PoolMember{
 	}
 	constructor( set, opts  ) {
 		super( set );
-		if( set instanceof SectorMsg ) {
-			this.id = set.id;
-			this.id = set.name;
-			this.id = set.wall;
-			this.id = set.r;
-			this.id = set.id;
-		} else {
+		{
 			this.#set = set;
 			if( opts ) {
 				this.set( opts ); // set set set and #set - great naming scheme.
@@ -1273,7 +1222,6 @@ class Sector extends PoolMember{
 				}
 			}
 		}
-		
 	}
 	get origin() {
 		return this.r.o;
@@ -1289,14 +1237,24 @@ class Sector extends PoolMember{
 	}
 	set dirty(val) {
 		this.#flags.dirty = true;
-		this.#set.on( "smudge", this );
+		this.on( "smudge" );
+	}
+	toJSOX() {
+		// right now only the ogrigin changes
+		// but we don't want to send everything chagnes all the time?		
+		return JSOX.stringify( {id:this.id
+			, r:this.r
+			, t:this.texture&&this.texture.id
+			, n:this.name&&this.name.id
+			, w:this.wall&&this.wall.id
+		} );
 	}
 	#ComputePointList() {
 		const temp = new Vector();
-		const pt = new Vector();
 		let plsCur;
 		let npoints = 0;
 		let pStart, pCur;
+		let pt;
 		let priorend = [true];
 
 		pCur = pStart = this.wall;
@@ -1304,9 +1262,9 @@ class Sector extends PoolMember{
 		{	
 			plsCur = pCur.line;//
 			if( priorend[0] )
-				pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.to );
+				pt = plsCur.ptTo;
 			else
-				pt.addScaled( plsCur.r.o, plsCur.r.n, plsCur.from );
+				pt = plsCur.ptFrom;
 			temp.sum( pt );
 			npoints++;
 			pCur = pCur.next( priorend );
@@ -1407,7 +1365,7 @@ class Sector extends PoolMember{
 		let priorend = [true];
 		do {
 			const o = pCur.line.r.o;
-			console.log( "Moving sector's line:", x, y );
+			//console.log( "Moving sector's line:", x, y );
 			o.x += x
 			o.y += y;
 			pCur = pCur.next( priorend );
@@ -1417,6 +1375,13 @@ class Sector extends PoolMember{
 			pCur.updateMating( walls, false, false )
 			pCur = pCur.next( priorend );
 		}while( pCur != pStart );
+		//console.log( "Resulting move moved", walls.length, "walls" );
+		for( let wall of walls ) {
+			//console.log( "update wall...", wall );
+			wall.line.on( 'update' );
+			//wall.set.on( 'update', wall );
+		}
+		this.on( 'update' );
 		return walls;
 	}
 
@@ -1517,22 +1482,26 @@ struct all_flagset
 
 class World {
 	#lines = new LineSet( this );
-	get lineSet() { return this.#walls }
+	get lineSet() { return this.#lines }
 	get lines() { return this.#lines.array }
 	#walls = new WallSet( this );
 	get wallSet() { return this.#walls }
 	get walls() { return this.#walls.array }
 	#sectors = new SectorSet( this );
-	get sectorSet() { return this.#walls }
+	get sectorSet() { return this.#sectors }
 	get sectors() { return this.#sectors.array }
 	#names = new NameSet( this );
-	get nameSet() { return this.#walls }
+	get nameSet() { return this.#names }
 	get names() { return this.#names.array }
+	#textures= new TextureSet(this);
+	get textureSet() { return this.#textures }
+	get textures() { return this.#textures.array }
+
 	bodies = [];
-	textures= [];
 	#firstUndo = null;
 	#firstRedo = null;
 	name = null;
+
 	#events = {};
 	
 
@@ -1545,16 +1514,6 @@ class World {
                         this.name = msg.name;
                 	return;
                 }
-			//this.createSquareSector( 0, 0 );
-			this.#lines.on("update", (line)=>{
-
-			})
-			this.#walls.on("update", (w)=>{
-				
-			})
-			this.#sectors.on("update", (s)=>{
-				
-			})
 	}
 
 
@@ -1578,6 +1537,9 @@ class World {
 	}
 	getWall( opts ){
 		return this.#walls.get( opts );
+	}
+	getTexture( opts ){
+		return this.#textures.get( opts );
 	}
 	getSector( opts ){
 		return this.#sectors.get( opts );
@@ -1625,10 +1587,11 @@ class World {
 
 	moveSector( id, x, y ){
 		const sector = this.sectors[id];
-		console.log(this.sectors, this, id, x, y );
+		console.log( "move sector:", sector, id, x, y );
 		const walls = sector.move( x, y );
-		console.log( "TRIGGER UPDATE", walls, this.#events );
-		this.on( "update", JSOX.stringify({op:'move',walls:walls} ) );
+		//console.log( "TRIGGER UPDATE", walls, this.#events );
+		if( walls.length )
+			this.on( "update" );
 	}
 
 	on( event, data, data2 ) {

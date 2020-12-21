@@ -25,6 +25,7 @@ const l = {
 	h : 0,
 	cursor : newImage( "cursor.png" ),
 	cursorSpot : {x:5, y:5},
+
 };
 
 
@@ -631,15 +632,15 @@ function setupWorld( world ) {
 		}
 		if( mouse.mouseLock.drag && mouse.mouseLock.near ) {
 			if(mouse.mouseLock.to === "CurSecOrigin")
-				l.ws.send( `{op:move,t:S,sector:${mouse.CurSector.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:S,id:${mouse.CurSector.id},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurEnds[0]")
-				l.ws.send( `{op:move,t:e0,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:e0,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "curEnds[1]")
-				l.ws.send( `{op:move,t:e1,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:e1,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurSlope")
-				l.ws.send( `{op:move,t:s,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:s,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurOrigin")
-				l.ws.send( `{op:move,t:o,wall:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:o,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
 		}
 
 		else {
@@ -787,6 +788,7 @@ function dispatchChanges( ) {
 		canvasRedraw();
 		for( let update of l.updates )
 			update.on( "flush" );
+		l.updates.length = 0;
 		l.refresh = false;
 	}
 }
@@ -804,6 +806,13 @@ function processMessage( msg ) {
 	} else if( msg.op === "world" ) {
 		console.log( "SETUP" );
 		l.editor = setupWorld( msg.world );
+
+	} else if( msg.op === "Line" ) {
+		l.world.lines[msg.id].set(JSOX.parse(msg.data));
+	} else if( msg.op === "Sector" ) {
+		l.world.sectors[msg.id].set(JSOX.parse(msg.data));
+	} else if( msg.op === "wall" ) {
+		l.world.walls[msg.id].set(JSOX.parse(msg.data));
 	} else if( msg.op === "create" ) {
 		if( msg.sub === "sector" ) {
 		}	
