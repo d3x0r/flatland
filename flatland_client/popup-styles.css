@@ -298,3 +298,36 @@ span {
 				color:black;
 				font-weight:bold;
 		}
+
+.popup{
+	/* visibility:hidden; */
+	/*right:0;*/
+	top:48px;
+	background-color: #666;
+	position:absolute;
+	z-index:50;
+	/*margin: 15px;*/
+	padding: 15px;
+	border-radius:10px;
+	border-color:white;
+	border-width:2;
+	border-style:solid;
+}
+/* Change the background color on mouse-over */
+.popup a:hover {
+  background-color: #ddd;
+  color: black;
+  text-decoration:underline;
+}
+
+.popup a {
+  background-color: #555;
+  color: white;
+}
+
+/* Style the active/current link*/
+.popup a.active {
+  background-color: dodgerblue;
+  color: white;
+}
+	

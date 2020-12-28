@@ -15,24 +15,27 @@ popup.caption = "New Caption";
 popup.divContent  // insert frame content here
 
 */
+const MF_STRING = 1;
+const MF_POPUP = 2;
+const MF_SEPARATOR = 4;
 
 
 const popups = {
+	defaultDrag : true,
+	autoRaise : true,
 	create : createPopup,
 	simpleForm : createSimpleForm,
 	simpleNotice : createSimpleNotice,
-        makeList : createList,
         list : createList,
         makeCheckbox : makeCheckbox,
-        makeNameInput : makeNameInput,  // form, object, field, text; popup to rename
-        makeTextInput : makeTextInput,  // form, object, field, text
+        makeNameInput : makeNameInput,
+        makeTextInput : makeTextInput,
+        makeTextField : makeTextField,
         makeButton : makeButton,
-        makeChoiceInput : makeChoiceInput,// form, object, field, choiceArray, text
-        makeDateInput : makeDateInput,  // form, object, field, text
-	strings : { get(s) { return s } },
 	setClass: setClass,
 	toggleClass: toggleClass,
 	clearClass:clearClass,
+	createMenu : createPopupMenu,
 }
 
 var popupTracker;
@@ -48,7 +51,7 @@ function addCaptionHandler( c, popup_ ) {
 		x:0,y:0,
 		dragging:false
 	};
-
+	if( popups.autoRaise )
 	popup_.divFrame.addEventListener( "mousedown", (evt)=>{
 		popupTracker.raise( popup );
 	} );
@@ -81,6 +84,7 @@ function addCaptionHandler( c, popup_ ) {
 			state.x = evt.x-pRect.left;
 			state.y = evt.y-pRect.top;
 			state.dragging = true;
+			console.log( "Got down." );
 			if( !added ) {	
 				added = true;
 				document.body.addEventListener( "mousemove", mm );
@@ -134,9 +138,12 @@ function addCaptionHandler( c, popup_ ) {
 		})
 
 	}
-	mouseHandler(c, mouseState );
 
-	mouseHandler(popup_.divFrame, mouseState );
+	if( popups.defaultDrag ) {
+		mouseHandler(c, mouseState );
+
+		mouseHandler(popup_.divFrame, mouseState );
+	}
 
 }
 
@@ -188,12 +195,8 @@ class Popup {
 	popup = this;
 
 	constructor(caption_,parent) {
-            if( "object" === typeof caption_ ) {
-                parent = caption_;
-                caption_ = '';
-            }
-		//this.divFrame.style.left= 0;
-		//this.divFrame.style.top= 0;
+		this.divFrame.style.left= 0;
+		this.divFrame.style.top= 0;
 		this.divFrame.className = parent?"formContainer":"frameContainer";
 		if( caption_ != "" )
 			this.divFrame.appendChild( this.divCaption );
@@ -205,8 +208,9 @@ class Popup {
 		this.divClose.className = "captionButton";
         	popupTracker.addPopup( this );
                 this.caption = caption_;
-                parent = (parent&&parent.divContent) || parent || document.body;
+                parent = (parent&&parent.divContent) || document.body;
 		parent.appendChild( this.divFrame );
+
 		addCaptionHandler( this.divCaption, this );
         }
 		set caption(val) {
@@ -240,20 +244,18 @@ class Popup {
 			this.divFrame.style.display = "none";
 		}
 		show() {
-			this.divFrame.style.display = "";
+			this.divFrame.style.display = "unset";
+			popupTracker.raise( this );
+
 			this.on( "show", true );
 		}
 		move(x,y) {
 			this.divFrame.style.left = x+"%";
 			this.divFrame.style.top = y+"%";
 		}
-	remove() {
-            this.divFrame.remove();
-            this.on("delete");
+	appendChild(e) {
+		return this.divContent.appendChild(e)
 	}
-	appendChild(c) {
-            	this.divContent.appendChild( c );
-           }
 }
 
 function createPopup( caption ) {
@@ -263,7 +265,6 @@ function createPopup( caption ) {
 function createSimpleForm( title, question, defaultValue, ok, cancelCb ) {
 	const popup = popups.create( title );
 	popup.on( "show", ()=>{
-		if( defaultValue !== null ) {
 		if( "function" === typeof defaultValue ){
 			input.value = defaultValue();
 		}
@@ -271,15 +272,10 @@ function createSimpleForm( title, question, defaultValue, ok, cancelCb ) {
 			input.value = defaultValue;
 		input.focus();
 		input.select();
-                }
 	})
-
-
 	popup.on( "close", ()=>{
 		// aborted...
-		//if( cancel && "function" === typeof cancel )
-		//	cancel && cancel();
-		
+		cancel && cancel();
 	});
 
 	var form = document.createElement( "form" );
@@ -296,15 +292,12 @@ function createSimpleForm( title, question, defaultValue, ok, cancelCb ) {
 	} );	
 
 	var text = document.createElement( "SPAN" );
-        text.style.whiteSpace = "pre";
 	text.textContent = question;
-	if( defaultValue !== null ) {
-		var input = document.createElement( "INPUT" );
-		input.className = "popupInputField";
-		input.setAttribute( "size", 45 );
-		input.value = defaultValue;
+	var input = document.createElement( "INPUT" );
+	input.className = "popupInputField";
+	input.setAttribute( "size", 45 );
+	input.value = defaultValue;
 
-        }
 	var okay = document.createElement( "BUTTON" );
 	okay.className = "popupOkay";
 	okay.textContent = "Okay";
@@ -312,7 +305,7 @@ function createSimpleForm( title, question, defaultValue, ok, cancelCb ) {
 	okay.addEventListener( "click", (evt)=>{
 		evt.preventDefault();
 		popup.hide();
-		ok && ok( input && input.value );
+		ok && ok( input.value );
 	})
 
 	var cancel = document.createElement( "BUTTON" );
@@ -335,10 +328,8 @@ function createSimpleForm( title, question, defaultValue, ok, cancelCb ) {
 	popup.divContent.appendChild( form );
 	form.appendChild( text );
 	form.appendChild( document.createElement( "br" ) );
-        if( input ) {
-		form.appendChild( input );
-		form.appendChild( document.createElement( "br" ) );
-        }
+	form.appendChild( input );
+	form.appendChild( document.createElement( "br" ) );
 	form.appendChild( document.createElement( "br" ) );
 	form.appendChild( cancel );
 	form.appendChild( okay );
@@ -394,7 +385,7 @@ function makeButton( form, caption, onClick ) {
 
 }
 
-function createSimpleNotice( title, question, ok ) {
+function createSimpleNotice( title, question, ok, cancel ) {
 	const popup = popups.create( title );
 	const show_ = popup.show.bind(popup);
 	popup.show = function( caption, content ) {
@@ -428,17 +419,18 @@ function createSimpleNotice( title, question, ok ) {
 	} );	
 
 	var text = document.createElement( "SPAN" );
+	text.className = "noticeText";
 	text.textContent = question;
 
-	var okay = document.createElement( "BUTTON" );
-	okay.className = "popupOkay";
-	okay.textContent = "Okay";
-	okay.setAttribute( "name", "submit" );
-	okay.addEventListener( "click", (evt)=>{
-		evt.preventDefault();
+	
+	var okay = makeButton( form, "Okay", ()=>{
 		popup.hide();
 		ok && ok( );
 	})
+	okay.className += " notice";
+	okay.children[0].className += " notice";
+
+
 
 	popup.divFrame.addEventListener( "keydown", (e)=>{
 		if(e.keyCode==27){
@@ -452,31 +444,34 @@ function createSimpleNotice( title, question, ok ) {
 	form.appendChild( document.createElement( "br" ) );
 	form.appendChild( document.createElement( "br" ) );
 	form.appendChild( okay );
-	
+
+	if( cancel )  {
+		let cbut = makeButton( form, "Cancel", ()=>{
+			popup.hide();
+			cancel && cancel( );
+		})
+		cbut.className += " notice";
+		cbut.children[0].className += " notice";
+	}
 	popup.center();
-	// notices should auto show.
-	//popup.hide();
+	popup.hide();
 	return popup;
 }
 
 
 
-class List {
-		 selected = null;
-		 groups = [];
-		 itemOpens = false;
-    constructor( parentDiv, parentList, toString )
-        {
-		this.toString = toString
-		this.divTable = parentDiv;
-                this.parentList = parentList;
-        }
+function createList( parentList, toString ) {
+	var selected = null;
+	var groups = [];
+	var itemOpens = false;
+	var groupList = {
+		divTable:parentList.parent,		
 
 		push(group, toString_, opens) {
 			var itemList = this.divTable.childNodes;
 			var nextItem = null;
 			for( nextItem of itemList) {
-				if( nextItem.textContent > this.toString(group) )
+				if( nextItem.textContent > toString(group) ) 
 					break;
 				nextItem = null;
 			}
@@ -487,22 +482,22 @@ class List {
 			this.divTable.insertBefore( newLi, nextItem );//) appendChild( newLi );
 			newLi.addEventListener( "click", (e)=>{
 				e.preventDefault();
-				if( this.selected )
-					this.selected.classList.remove("selected");
+				if( selected )
+					selected.classList.remove("selected");
 				newLi.classList.add( "selected" );
-				this.selected = newLi;
+				selected = newLi;
 			})
 
 			var newSubList = document.createElement( "UL");
 			newSubList.className = "listSubList";
-			if( this.parentList && this.parentList.parentItem )
-				this.parentList.parentItem.enableOpen( this.parentList.thisItem );
+			if( parentList.parentItem )
+				parentList.parentItem.enableOpen( parentList.thisItem );
 			if( opens ) {
 			//	this.enableOpen(newLi);
 			}
 
 			var treeLabel = document.createElement( "span" );
-			treeLabel.textContent = this.toString(group);
+			treeLabel.textContent = toString(group);
 			treeLabel.className = "listItemLabel";
 			newLi.appendChild( treeLabel );
 
@@ -510,10 +505,12 @@ class List {
 			newLi.appendChild( newSubList );
 			//newSubList.appendChild( newSubDiv);
 			var newRow;
-			var subItems = createList( this, newSubList, toString_, true );
-			this.groups.push( newRow={ opens : false, group:group, item: newLi, subItems:subItems, parent:this.parentList } );
+			var listParams;
+			var subItems = createList( listParams = { thisItem: null, parentItem: this, parent: newSubList }, toString_, true );
+			groups.push( newRow={ opens : false, group:group, item: newLi, subItems:subItems, parent:parentList } );
+			listParams.thisItem = newRow;
 			return newRow;
-		}
+		},
 		enableOpen(item) {
 			if( item.opens) return;
 			item.opens = true;
@@ -538,7 +535,7 @@ class List {
 
 					}
 				})
-		}
+		},
 		enableDrag(type,item,key1,item2,key2) {
 			item.item.setAttribute( "draggable", true );
 			item.item.addEventListener( "dragstart", (evt)=>{
@@ -555,7 +552,7 @@ class List {
 				if( item2 )
 					evt.dataTransfer.setData("text/item2", item2.group[key2] );
 			})
-		}
+		},
 		enableDrop( type, item, cbDrop ) {
 			item.item.addEventListener( "dragover", (evt)=>{
 				evt.preventDefault();
@@ -572,25 +569,23 @@ class List {
 					}
 				} ).write( objType );
 			})
-		}
+		},
 		update(group) {
-			var item = this.groups.find( group_=>group_.group === group );
-			item.textContent = this.toString( group );
-		}
+			var item = groups.find( group_=>group_.group === group );
+			item.textContent = toString( group );
+		},
 		get items() {
-			return this.groups;
-		}
+			return groups;
+		},
 		reset() {
 			while( this.divTable.childNodes.length )
 				this.divTable.childNodes[0].remove();
 		}
 	}
-
-function createList( parent, parentList, toString, opens ) {
-     return new List( parent, parentList, toString, opens );
+	return groupList;
 }
 
-function makeCheckbox( form, o, field, text ) 
+function makeCheckbox( form, o, text, field ) 
 {
 	var textCountIncrement = document.createElement( "SPAN" );
 	textCountIncrement.textContent = text;
@@ -615,116 +610,120 @@ function makeCheckbox( form, o, field, text )
 			inputCountIncrement.checked = val;
 		},
 		get value() { return this.checked; },
-		set value(val) { this.checked = val; }
-                ,
-                reset(){
-                    o[field] = initialValue;
-                    inputCountIncrement.checked = initialValue;
-                },
-                changes() {
-                    if( o[field] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + o[field];
-                    }
-                    return '';
-                }
+		set value(val) { this.checked = val; },
 	}
 }
 
-function makeTextInput( form, input, value, text, money, percent ){
-	const initialValue = input[value];
+function makeTextInput( form, input, text, value, money, percent ){
 
 	var textMinmum = document.createElement( "SPAN" );
 	textMinmum.textContent = text;
-	var inputControl = document.createElement( "INPUT" );
-	inputControl.className = "textInputOption rightJustify";
+	var inputMinimum = document.createElement( "INPUT" );
+	inputMinimum.className = "textInputOption rightJustify";
 	//textDefault.
-        function setValue() {
 	if( money ) {
-		inputControl.value = utils.to$(input[value]);
-		inputControl.addEventListener( "change", (e)=>{
-			var val = utils.toD(inputControl.value);
-			inputControl.value = utils.to$(val);
+		inputMinimum.value = utils.to$(input[value]);
+		inputMinimum.addEventListener( "change", (e)=>{
+			var val = utils.toD(inputMinimum.value);
+			inputMinimum.value = utils.to$(val);
 		})
 	} else if( percent ) {
-		inputControl.value = utils.toP(input[value]);
-		inputControl.addEventListener( "change", (e)=>{
-			var val = utils.fromP(inputControl.value);
-			inputControl.value = utils.toP(val);
+		inputMinimum.value = utils.toP(input[value]);
+		inputMinimum.addEventListener( "change", (e)=>{
+			var val = utils.fromP(inputMinimum.value);
+			inputMinimum.value = utils.toP(val);
 		})
 	}else {
-		inputControl.value = input[value];
+		inputMinimum.value = input[value];
 	}
-        }
-        setValue();
 
 	var binder = document.createElement( "div" );
 	binder.className = "fieldUnit";
 	form.appendChild(binder );
 	binder.appendChild( textMinmum );
-	binder.appendChild( inputControl );
+	binder.appendChild( inputMinimum );
 	return {
 		get value () {
 			if( money )
-				return utils.toD(inputControl.value);
+				return utils.toD(inputMinimum.value);
 			if( percent ) 
-				return utils.fromP(inputControl.value);
-			return inputControl.value;
+				return utils.fromP(inputMinimum.value);
+			return inputMinimum.value;
 		},
 		set value (val) {
 			if( money )
-				inputControl.value = utils.to$(val);
+				inputMinimum.value = utils.to$(val);
 			else if( percent )
-				inputControl.value = utils.toP(val);
+				inputMinimum.value = utils.toP(val);
 			else
-				inputControl.value = val;			
-		},
-                reset(){
-                    input[value] = initialValue;
-                    setValue();
-                },
-                changes() {
-                    if( input[value] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + input[value];
-                    }
-                    return '';
-                }
+				inputMinimum.value = val;			
+		}
 	}
 }
 
+function makeTextField( form, input, text, value, money, percent ){
 
-function makeNameInput( form, input, value, text ){
-	const initialValue = input[value];
+	var textMinmum = document.createElement( "SPAN" );
+	textMinmum.textContent = text;
+	var inputMinimum = document.createElement( "SPAN" );
+	inputMinimum.className = "rightJustify";
+	inputMinimum.style.float="right";
+	//textDefault.
+	if( money ) {
+		inputMinimum.textContent = utils.to$(input[value]);
+		inputMinimum.addEventListener( "change", (e)=>{
+			var val = utils.toD(inputMinimum.textContent);
+			inputMinimum.textContent = utils.to$(val);
+		})
+	} else if( percent ) {
+		inputMinimum.textContent = utils.toP(input[value]);
+		inputMinimum.addEventListener( "change", (e)=>{
+			var val = utils.fromP(inputMinimum.textContent);
+			inputMinimum.textContent = utils.toP(val);
+		})
+	}else {
+		inputMinimum.textContent = input[value];
+	}
+
+	var binder = document.createElement( "div" );
+	binder.className = "fieldUnit";
+	form.appendChild(binder );
+	binder.appendChild( textMinmum );
+	binder.appendChild( inputMinimum );
+	return {
+		divFrame : binder,
+		refresh() {
+			inputMinimum.textContent = input[value];
+		},
+		get value () {
+			if( money )
+				return utils.toD(inputMinimum.textContent);
+			if( percent ) 
+				return utils.fromP(inputMinimum.textContent);
+			return inputMinimum.value;
+		},
+		set value (val) {
+			if( money )
+				inputMinimum.textContent = utils.to$(val);
+			else if( percent )
+				inputMinimum.textContent = utils.toP(val);
+			else
+				inputMinimum.textContent = val;			
+		}
+	}
+}
+
+function makeNameInput( form, input, text ){
 	var binder;
 	var textLabel = document.createElement( "SPAN" );
 	textLabel.textContent = text;
 
 	var text = document.createElement( "SPAN" );
-	text.textContent = input[value];
+	text.textContent = input.name;
 
 	var buttonRename = document.createElement( "Button" );
-	buttonRename.textContent = popups.strings.get("(rename)");
+	buttonRename.textContent = "(rename)";
 	buttonRename.className="buttonOption rightJustify";
-        buttonRename.addEventListener("click", (evt)=>{
-		evt.preventDefault();
-                //title, question, defaultValue, ok, cancelCb
-		const newName = createSimpleForm( popups.strings.get("Change Name")
-                                                 , popups.strings.get("Enter new name")
-                                                 , input[value]
-                                                 , (v)=>{
-                                                 	input[value] = v;
-							text.textContent = v;
-                                                 }
-                                                 );
-                newName.show();
-	} );
 
 	binder = document.createElement( "div" );
 	binder.className = "fieldUnit";
@@ -739,23 +738,10 @@ function makeNameInput( form, input, value, text ){
 		}		,
 		set value(val) {
 			text.textContent = val;
-		},
-                reset(){
-                    input[value] = initialValue;
-                    textLabel.textContent = initialValue;
-                },
-                changes() {
-                    if( input[value] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + input[value];
-                    }
-                    return '';
-                }
+		}
 	}
 }
+
 	function toggleClass( el, cn )  {
 		if( el.className.includes(cn) )  {
 			el.className = el.className.split( " " ).reduce( (a,el)=> ( el !== cn )?(a.push(el),a):a, [] ).join(' ');
@@ -777,181 +763,98 @@ function makeNameInput( form, input, value, text ){
 	}
 
 
+//--------------------------- Quick Popup Menu System ------------------------------
 
-function makeDateInput( form, input, value, text ){
-	const initialValue = input[value];
-	var textMinmum = document.createElement( "SPAN" );
-	textMinmum.textContent = text;
-	var inputControl = document.createElement( "INPUT" );
-	inputControl.className = "textInputOption rightJustify";
-        inputControl.type = "date";
-
-	//textDefault.
-	if( input[value] instanceof Date ) {
-		inputControl.valueAsDate = input[value];
-        }else
-		inputControl.value = input[value];
-        inputControl.addEventListener( "change",(evt)=>{
-		console.log( "Date type:", inputControl.value, new Date( inputControl.value ) );
-		input[value] = new Date( inputControl.value );
-	} );
-
-	var binder = document.createElement( "div" );
-	binder.className = "fieldUnit";
-	form.appendChild(binder );
-	binder.appendChild( textMinmum );
-	binder.appendChild( inputControl );
-	return {
-		get value () {
-			return inputControl.value;
-		},
-		set value (val) {
-                    	//input[value] = val;
-			inputControl.value = val;
-		},
-                reset(){
-                    input[value] = initialValue;
-                    inputControl.valueAsDate = initialValue;
-                },
-                changes() {
-                    if( input[value] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + input[value];
-                    }
-                    return '';
-                }
+var mouseCatcher = document.getElementById( "mouseCatcher" ) || document.createElement( "div" );
+if( !mouseCatcher ) {
+	if( mouseCatcher.name !== "mouseCatcher" ) {
+		document.body.appendChild( mouseCatcher )
 	}
+	
 }
+var topMenu;
+mouseCatcher.addEventListener( "click", (evt)=>{
+	mouseCatcher.style.visibility = "hidden";
+	if( topMenu )
+		topMenu.hide( true );
+} );
 
-function makeZipInput( form, input, value ){
+function createPopupMenu() {
+	var menu = {
+		items: [],
+		parent : null,
+		container : document.createElement( "div" ),
+		board : null,
+		// hMenu, MF_STRING, MNU_ADDNEURON, ("Add &Neuron") );
+		appendItem( _flags, value, text ) {
+			if( _flags & MF_SEPARATOR) {
+				var newItem = document.createElement( "HR" );
+				this.container.appendChild( newItem );
 
-	const initialValue = input[value];
-	var textMinmum = document.createElement( "SPAN" );
-	textMinmum.textContent = text;
-	var inputControl = document.createElement( "INPUT" );
-	inputControl.className = "textInputOption rightJustify";
-        inputControl.type = "date";
+			}else {
+				var newItem = document.createElement( "A" );
+				var newItemBR = document.createElement( "BR" );
+				this.container.appendChild( newItem );
+				this.container.appendChild( newItemBR );
+				var flags = _flags;
+				newItem.value = value;
+				newItem.textContent = text;
+				newItem.className = "popupItem";
+				if( flags & MF_POPUP ) {
+					value.parent = this;
+					newItem.addEventListener( "mouseover", (evt)=>{
+						var r = newItem.getBoundingClientRect();
+						console.log( "Item is clicked show that.", evt.target.value, evt.clientX, evt.clientY );
 
-	//textDefault.
-	inputControl.value = input[value];
-        inputControl.addEventListener( "change",(evt)=>{
-		input[value] = inputControl.value;
-	} );
-
-	var binder = document.createElement( "div" );
-	binder.className = "fieldUnit";
-	form.appendChild(binder );
-	binder.appendChild( textMinmum );
-	binder.appendChild( inputControl );
-	return {
-		get value () {
-			return inputControl.value;
+						newItem.value.show( this.board, evt.clientX, r.top - 10, menu.cb );
+					} );
+					newItem.addEventListener( "mouseout", (evt)=>{
+						var r = newItem.getBoundingClientRect();
+						console.log( "Item is clicked show that.", evt.target.value, evt.clientX, r.top );
+						if( evt.toElement !== newItem.value.container )		
+							newItem.value.hide();
+					} );
+				} else
+					newItem.addEventListener( "click", (evt)=>{
+						menu.cb( evt.target.value );
+						console.log( "Item is clicked.", evt.target.value );
+						this.hide( true );
+					} );
+			}
 		},
-		set value (val) {
-			inputControl.value = val;
+		hide( all ) {
+			this.container.style.visibility = "hidden";
+			if( this.parent ) {
+				if( all )
+					this.parent.hide( all );
+			} else {
+				mouseCatcher.style.visibility = "hide"
+			}
+		},
+		show( board, x, y, cb ) {
+			this.board = board;
+			menu.cb = cb;
+			mouseCatcher.style.visibility = "visible"
+			this.container.style.visibility = "inherit";
+			this.container.style.left = x;
+			this.container.style.top = y;
+		},
+		reset() {
+			console.log( "hide everything?" );	
 		}
-	}
+	};
+
+	mouseCatcher.appendChild( menu.container );
+	menu.container.className = "popup";
+	menu.container.style.zIndex = 50;
+	document.body.appendChild( menu.container );
+	return menu;
 }
 
-function makeSSNInput( form, input, value ){
-
-	const initialValue = input[value];
-	var textMinmum = document.createElement( "SPAN" );
-	textMinmum.textContent = text;
-	var inputControl = document.createElement( "INPUT" );
-	inputControl.className = "textInputOption rightJustify";
-        inputControl.type = "date";
-
-	//textDefault.
-	inputControl.value = input[value];
-        inputControl.addEventListener( "change",(evt)=>{
-		input[value] = inputControl.value;
-	} );
-
-	var binder = document.createElement( "div" );
-	binder.className = "fieldUnit";
-	form.appendChild(binder );
-	binder.appendChild( textMinmum );
-	binder.appendChild( inputControl );
-	return {
-		get value () {
-			return inputControl.value;
-		},
-		set value (val) {
-			inputControl.value = val;
-		},
-                reset(){
-                    input[value] = initialValue;
-                    inputControl.value = initialValue;
-                },
-                changes() {
-                    if( input[value] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + input[value];
-                    }
-                    return '';
-                }
-	}
-}
-
-function makeChoiceInput( form, input, value, choices, text ){
-	const initialValue = input[value];
-
-	var textMinmum = document.createElement( "SPAN" );
-	textMinmum.textContent = text;
-	var inputControl = document.createElement( "SELECT" );
-	inputControl.className = "selectInput rightJustify";
-        for( let choice of choices ) {
-            	const option = document.createElement( "option" );
-                option.text = choice;
-		inputControl.add( option );
-        }
-	//textDefault.
-	inputControl.value = input[value];
-        inputControl.addEventListener( "change",(evt)=>{
-		const idx = inputControl.selectedIndex;
-		if( idx >= 0 ) {
-			console.log( "Value in select is :", inputControl.options[idx].text );
-			input[value] = inputControl.options[idx].text;
-                }
-	} );
-
-	var binder = document.createElement( "div" );
-	binder.className = "fieldUnit";
-	form.appendChild(binder );
-	binder.appendChild( textMinmum );
-	binder.appendChild( inputControl );
-	return {
-		get value () {
-			return inputControl.value;
-		},
-		set value (val) {
-			inputControl.value = val;
-		},
-                reset(){
-                    input[value] = initialValue;
-                    inputControl.value = initialValue;
-                },
-                changes() {
-                    if( input[value] !== initialValue ) {
-                        return text
-                            + popups.strings.get( " changed from " )
-                            + initialValue
-                            + popups.strings.get( " to " )
-                            + input[value];
-                    }
-                    return '';
-                }
-	}
-}
-
-
+createPopupMenu.flags = { MF_STRING : MF_STRING,
+	MF_POPUP: MF_POPUP,
+	MF_SEPARATOR:MF_SEPARATOR,
+};
 
 
 export {popups};

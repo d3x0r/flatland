@@ -3,7 +3,7 @@ const surface = document.getElementById( "testSurface" );
 const app = document.getElementById( "AppContainer" );
 
 import {JSOX} from "./jsox.mjs" 
-import {popups,Popup} from "./popups.js"
+import {popups,Popup} from "./popups.mjs"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -575,9 +575,19 @@ function drawCursor() {
 }
 
 
+function setupMenu() {
+	const menu = popups.createMenu();
+	menu.appendItem( popups.createMenu.flags.MF_STRING, 1, "option 1" );
+	menu.appendItem( popups.createMenu.flags.MF_STRING, 2, "option 2" );
+	menu.appendItem( popups.createMenu.flags.MF_STRING, 3, "option 3" );
+	menu.appendItem( popups.createMenu.flags.MF_STRING, 4, "option 4" );
+	return menu
+}
+
 function setupWorld( world ) {
 	const editor = new popups.create( "World Editor", app );
 	const canvas = l.canvas = document.createElement( "canvas" );
+	const popup = setupMenu();
 	canvas.requestPointerLock = canvas.requestPointerLock ||
                             canvas.mozRequestPointerLock;
 
@@ -612,17 +622,26 @@ function setupWorld( world ) {
 		}
 	})
 	canvas.addEventListener( "mousedown", (evt)=>{
-		var rect = canvas.getBoundingClientRect();
-		const x = evt.clientX - rect.left;
-		const y = evt.clientY - rect.top;
-		mouse.pos.x = x;
-		mouse.pos.y = y;
-		mouse.rpos.x = REAL_X(x);
-		mouse.rpos.y = REAL_Y(y);
-		if( mouse.mouseLock.near ){
-			mouse.mouseLock.drag = true;
-		}else
-			mouse.drag = true;
+		evt.preventDefault();
+		if( evt.buttons & 2 ) {
+			evt.stopPropagation();
+			popup.show( null, evt.clientX, evt.clientY, (val)=>{
+				console.log( "Popup Value:", val );
+			} );
+			
+		} else {
+			var rect = canvas.getBoundingClientRect();
+			const x = evt.clientX - rect.left;
+			const y = evt.clientY - rect.top;
+			mouse.pos.x = x;
+			mouse.pos.y = y;
+			mouse.rpos.x = REAL_X(x);
+			mouse.rpos.y = REAL_Y(y);
+			if( mouse.mouseLock.near ){
+				mouse.mouseLock.drag = true;
+			}else
+				mouse.drag = true;
+		}
 	})
 
 	function Color(r,g,b){
@@ -801,6 +820,11 @@ function setupWorld( world ) {
 		mouse.mouseLock.drag = false;
 	})
 
+	canvas.addEventListener('contextmenu', function(evt){
+		evt.preventDefault();
+		evt.stopPropagation();
+   	 return false;
+	}); 
 	l.w = canvas.width = 1024;
 	l.h = canvas.height = 768;
 	l.xOfs = (l.w/2)*l.scale;
