@@ -312,6 +312,7 @@ span {
 	border-color:white;
 	border-width:2;
 	border-style:solid;
+	font-size:150%;
 }
 /* Change the background color on mouse-over */
 .popup a:hover {
@@ -331,3 +332,10 @@ span {
   color: white;
 }
 	
+div.mouseCatcher{
+    width: 100%;
+    height:100%;
+    position:absolute;
+    z-index : 45; /* under popup zindex; over all else */
+    visibility: hidden;
+}

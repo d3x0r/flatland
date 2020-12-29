@@ -572,7 +572,7 @@ function drawCursor() {
 		  //console.log('The pointer lock status is now locked');
 		  		l.worldCtx.drawImage( l.cursor, mouse.pos.x, mouse.pos.y );
 	  } else {
-		  console.log('The pointer lock status is now unlocked');
+		  //console.log('The pointer lock status is now unlocked');
 	  }
 }
 
@@ -625,6 +625,7 @@ function setupWorld( world ) {
 	})
 	canvas.addEventListener( "mousedown", (evt)=>{
 		evt.preventDefault();
+		evt.stopPropagation();
 		if( evt.buttons & 2 ) {
 			evt.stopPropagation();
 			popup.show( null, evt.clientX, evt.clientY, (val)=>{
