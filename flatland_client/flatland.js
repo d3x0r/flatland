@@ -2,8 +2,8 @@
 const surface = document.getElementById( "testSurface" );
 const app = document.getElementById( "AppContainer" );
 
-import {JSOX} from "./jsox.mjs" 
-import {popups,Popup} from "./popups.mjs"
+import {JSOX} from "jsox" 
+import {popups,Popup} from "@d3x0r/popups"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -11,6 +11,8 @@ classes.setDecoders( JSOX );
 
 var requiredImages = [];
 var maxRequired = 0; // countdown to dispatch next init after all requested images load
+
+const localStorage = window.localStorage || { getItem(a){ return undefined;} };
 
 const l = {
 	world : null,
@@ -708,8 +710,8 @@ function setupWorld( world ) {
 					{														
 						mouse.flags[boolvar] = true;			 
 						mouse.flags.bLocked = true;			 
-						x = what.x; 
-						y = what.y;						 
+						mouse.pos.x = what.x; 
+						mouse.pos.y = what.y;						 
 						//SetFrameMousePosition( pc, x, y );
 						return true;
 					}

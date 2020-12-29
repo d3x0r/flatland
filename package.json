@@ -1,5 +1,5 @@
 {
-  "name": "flatland",
+  "name": "@d3x0r/flatland",
   "version": "0.3.0",
   "description": "Flatland game (for heroku?)",
   "engines": {
@@ -11,7 +11,9 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "sack.vfs":"latest"
+    "@d3x0r/popups": "latest",
+    "jsox": "latest",
+    "sack.vfs": "latest"
   },
   "repository": {
     "type": "git",
@@ -20,5 +22,18 @@
   "keywords": [
     "flatland"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/cli": "^7.0.0",
+    "@babel/core": "^7.0.0",
+    "@babel/node": "^7.12.10",
+    "@babel/plugin-proposal-class-properties": "^7.12.1",
+    "@babel/plugin-proposal-private-methods": "^7.12.1",
+    "@rollup/plugin-node-resolve": "^11.0.1",
+    "acorn": "^7.0.0",
+    "acorn-private-class-elements": "^0.2.7",
+    "acorn-private-methods": "^0.3.3",
+    "babel-plugin-module-resolver": "^4.1.0",
+    "babel-preset-latest": "^6.24.1"
+  }
 }

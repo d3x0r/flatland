@@ -1,6 +1,6 @@
 
 let drawLine = null;
-import {JSOX} from "./jsox.mjs"
+import {JSOX} from "jsox"
 
 const localParseState = {
 	world : null,
@@ -168,7 +168,7 @@ function buildNamefromJSOX( field,val ) {
 		this.name.id = val;
 		return undefined;
 	case "name":
-		this.name.name = name;
+		this.name.name = val;
 		return undefined;
 	} 
 }
@@ -748,7 +748,7 @@ class Wall extends PoolMember{
 		
 		const pWall = this;
 		function UpdateResult(r) {				 
-			if( !r ) console.log( "Failing update at : %d", __LINE__ ); 
+			if( !r ) console.log( "Failing update at : updateResult updateMatin" ); 
 			//console.log( "posting update for wall...", wall );
 			if( r )
 				if( !walls.find( w=>w===wall )) walls.push( wall );
@@ -929,7 +929,7 @@ class Wall extends PoolMember{
 								ptOther = plsOther.ptFrom;
 							plsEnd.from = 0;
 							plsEnd.to = 1;
-							lsEnd.r.o.set( ptOther );
+							plsEnd.r.o.set( ptOther );
 							ptOther.sub( ptEnd, ptOther );
 							plsEnd.r.n.set( ptOther );
 							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
@@ -997,13 +997,13 @@ class Wall extends PoolMember{
 					let r;
 					if( r = FindIntersectionTime( plsStart.r.n, plsStart.r.o
 						, plsEnd.r.n, plsEnd.r.o ) &&
-						t1 >= plsStart.from && t1 <= plsStart.to && 
-						t2 >= plsEnd.from && t2 <= plsEnd.to  )
+						r.t1 >= plsStart.from && r.t1 <= plsStart.to && 
+						r.t2 >= plsEnd.from && r.t2 <= plsEnd.to  )
 					{
 						let tmp;
 						if( AdjustPass++ )
 						{
-							Log( "We're dying!" );
+							console.log( "We're dying!" );
 							return UpdateResult( false );
 						}
 						tmp = pWall.start_at_end;
@@ -1016,12 +1016,12 @@ class Wall extends PoolMember{
 							pWall.start = i;
 						}
 		
-						if( pEnd.iWallStart == iWall )
+						if( pEnd.start == wall )
 							pEnd.start_at_end = !pEnd.start_at_end;
 						else
 							pEnd.end_at_end = !pEnd.end_at_end;
 		
-						if( pStart.iWallStart == iWall )
+						if( pStart.start == wall )
 							pStart.start_at_end = !pStart.start_at_end;
 						else
 							pStart.end_at_end = !pStart.end_at_end;
@@ -1107,7 +1107,7 @@ class Wall extends PoolMember{
 				}
 				else
 				{
-					Log2( "Failed to intersect wall with iWallStart %s(%d)", __FILE__, __LINE__ );
+					console.log( "Failed to intersect wall with iWallStart %s(%d)", "classes.mjs",0);
 					return UpdateResult( false );
 				}
 	
@@ -1123,7 +1123,7 @@ class Wall extends PoolMember{
 				}
 				else
 				{
-					Log2( "Failed to intersect wall with iWallStart %s(%d)", __FILE__, __LINE__ );
+					console.log( "Failed to intersect wall with iWallStart %s(%d)", "classes.mjs",0 );
 					return UpdateResult( false );
 				}
 			}
@@ -1222,9 +1222,6 @@ class Sector extends PoolMember{
 				}
 			}
 		}
-	}
-	get origin() {
-		return this.r.o;
 	}
 	has( wall ) {
 		const start = this.wall;
@@ -1517,15 +1514,6 @@ class World {
 	}
 
 
-	getTexture( name ) {
-		for( var t of this.textures ) {
-			if( t.name === name ) return t;
-		}
-		const newT = new Texture();
-		newT.name = name;
-		this.textures.push( newT );
-		return newT
-	}
 	createSector( wall, x, y ) {
 		const w = this.getWall( { mating:wall } );
 
