@@ -1,6 +1,6 @@
 {
   "name": "@d3x0r/flatland",
-  "version": "0.3.0",
+  "version": "0.3.101",
   "description": "Flatland game (for heroku?)",
   "engines": {
     "node": "15.x"
