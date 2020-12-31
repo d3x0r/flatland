@@ -1,6 +1,7 @@
 
 let drawLine = null;
-import {JSOX} from "jsox"
+//import {JSOX} from "jsox"
+import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
 
 const localParseState = {
 	world : null,
@@ -308,6 +309,8 @@ class Ray {
 	set(opts ) {
 		this.o.set( opts.o );
 		this.n.set( opts.n );
+		if( !opts.n.x && !opts.n.y && !opts.n.z )
+			debugger;
 		return this;
 	}
 }
@@ -435,17 +438,20 @@ class Line extends PoolMember{
 		opts && this.set(opts)
 	}
 	toJSOX() {
+		if( !this.r.n.x&& !this.r.n.y &&!this.r.n.z )
+			debugger;
 		return JSOX.stringify( {id:this.id,r:this.r, t:this.to,f:this.from});
 	}
 	set( opts ) {
 		if( opts.line && opts.line instanceof Line ){
 			this.r.set( opts.ray.r );
-			this.from = opts.ray.from;
-			this.to = opts.ray.to;
+			this.from = opts.f;
+			this.to = opts.t;
 			return this;
 		} 
 
 		if( "id" in opts ) { 
+			if( opts.id !== this.id ) throw new Error( "Mismatch ID");
 			this.r.set( opts.r );
 			this.from = opts.f;
 			this.to = opts.t;
@@ -705,7 +711,6 @@ class Wall extends PoolMember{
 	}
 	get from() {
 		if( this.#flags.dirty ) this.update();
-
 		return this.line.ptFrom;
 	}
 	get dirty() {
@@ -763,6 +768,7 @@ class Wall extends PoolMember{
 		let pStart, pEnd;
 		let ptStart, ptEnd;
 		let lsStartSave, lsEndSave;
+		let ptOther = new Vector();
 		bErrorOK = true; // DUH! 
 
 		// this wall moved, so for all mating lines, update this beast.
@@ -827,12 +833,11 @@ class Wall extends PoolMember{
 				//Log( "UpdateMating("STRSYM(__LINE__)")" );
 				if( pWall.start_at_end )
 				{
-					let ptOther;
 					// compute start point..
 					if( !pStart.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther = plsStart.ptTo;
+						ptOther.set(  plsStart.ptTo);
 						// if original end != new end 
 						if( !Near( ptOther, ptStart ) ) 
 						{
@@ -840,14 +845,15 @@ class Wall extends PoolMember{
 							let plsOther = pOtherWall.line;
 
 							if( pStart.start_at_end )
-								ptOther = plsOther.ptTo;
+								ptOther.set(  plsOther.ptTo );
 							else
-								ptOther = plsOther.ptFrom;
+								ptOther.set(  plsOther.ptFrom );
 		
 							plsStart.from = 0;
 							plsStart.to = 1;
 							plsStart.r.o.set( ptOther );
 							ptOther.sub( ptStart, ptOther );
+							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
 							plsStart.r.n.set( ptOther );
 							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
 							if( pStart.into )
@@ -866,12 +872,11 @@ class Wall extends PoolMember{
 				}
 				else  // ( !pWall.start_at_end )
 				{
-					let ptOther;
 					// compute end point..
 					if( !pStart.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther = plsStart.ptFrom;
+						ptOther.set(  plsStart.ptFrom );
 						// if original end != new end 
 						console.log( "HERE:", plsStart, ptOther, ptStart )
 						if( !Near( ptOther, ptStart ) )
@@ -879,9 +884,9 @@ class Wall extends PoolMember{
 							let pOtherWall = pStart.end;
 							let plsOther = pOtherWall.line;
 							if( pStart.end_at_end )
-								ptOther = plsOther.to;
+								ptOther.set( plsOther.to );
 							else
-								ptOther = plsOther.from;
+								ptOther.set( plsOther.from );
 
 							plsStart.from = -1;
 							plsStart.to = 0;
@@ -889,6 +894,7 @@ class Wall extends PoolMember{
 
 							//SetPoint( plsStart.r.o, ptOther );
 							ptOther.sub( ptOther, ptStart )
+							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
 							plsStart.r.n.set( ptOther );
 							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
 							if( pStart.into )
@@ -912,11 +918,10 @@ class Wall extends PoolMember{
 				//Log( "UpdateMating("STRSYM(__LINE__)")" );
 				if( pWall.end_at_end )
 				{
-					let ptOther;
 					if( !pEnd.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther = plsEnd.ptTo;
+						ptOther.set(  plsEnd.ptTo);
 						// if original end != new end 
 						if( !Near( ptOther, ptEnd ) )
 						{
@@ -924,13 +929,14 @@ class Wall extends PoolMember{
 							let plsOther = pOtherWall.line;
 
 							if( pEnd.start_at_end )
-								ptOther = plsOther.ptTo;
+								ptOther.set( plsOther.ptTo);
 							else
-								ptOther = plsOther.ptFrom;
+								ptOther.set( plsOther.ptFrom );
 							plsEnd.from = 0;
 							plsEnd.to = 1;
 							plsEnd.r.o.set( ptOther );
 							ptOther.sub( ptEnd, ptOther );
+							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
 							plsEnd.r.n.set( ptOther );
 							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
 							if( pEnd.into )
@@ -951,13 +957,12 @@ class Wall extends PoolMember{
 				}
 				else	//(!pWall.end_at_end)
 				{
-					let ptOther;
 					// compute end point
 					if( !pEnd.#flags.bUpdating )
 					{
 		
 						// compute original end of this line
-						ptOther = plsEnd.ptFrom;
+						ptOther.set(  plsEnd.ptFrom);
 						// if original end != new end 
 						if( !Near( ptOther, ptEnd ) )
 						{
@@ -965,13 +970,14 @@ class Wall extends PoolMember{
 							let plsOther = pOtherWall.line;
 
 							if( pEnd.end_at_end )
-								ptOther = plsOther.ptTo;
+								ptOther.set( plsOther.ptTo);
 							else
-								ptOther = plsOther.ptFrom;
+								ptOther.set( plsOther.ptFrom);
 							plsEnd.from = -1;
 							plsEnd.to = 0;
 							plsEnd.r.o.set( ptOther );
 							ptOther.sub( ptOther, ptEnd );
+							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
 							plsEnd.r.n.set( ptOther );
 							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
 							if( pEnd.into )

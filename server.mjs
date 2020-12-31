@@ -101,10 +101,11 @@ server.onrequest( function( req, res ) {
 		 req.socket.remoteAddress ||
 		 req.connection.socket.remoteAddress;
 	//ws.clientAddress = ip;
-
 	//console.log( "Received request:", req );
 	if( req.url === "/" ) req.url = "/index.html";
 	var filePath = "flatland_client" + unescape(req.url);
+	if( req.url.startsWith( "/node_modules/" ) )
+		filePath="." + unescape(req.url);
 	var extname = path.extname(filePath);
 	var contentType = 'text/html';
 	console.log( ":", extname, filePath )

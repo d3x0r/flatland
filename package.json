@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@d3x0r/popups": "latest",
-    "jsox": "latest",
+    "jsox": "^1.2.106",
     "sack.vfs": "latest"
   },
   "repository": {

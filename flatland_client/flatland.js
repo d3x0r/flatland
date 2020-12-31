@@ -2,8 +2,10 @@
 const surface = document.getElementById( "testSurface" );
 const app = document.getElementById( "AppContainer" );
 
-import {JSOX} from "jsox" 
-import {popups,Popup} from "@d3x0r/popups"
+//import {JSOX} from "jsox" 
+//import {popups,Popup} from "@d3x0r/popups"
+import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
+import {popups,Popup} from "../node_modules/@d3x0r/popups/popups.mjs"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -53,7 +55,6 @@ function openSocket() {
 			l.editor = null;
 			l.canvas = null;
 		}
-
 		// websocket is closed. 
 	};
 }
@@ -579,10 +580,14 @@ function drawCursor() {
 
 function setupMenu() {
 	const menu = popups.createMenu();
-	menu.appendItem( popups.createMenu.flags.MF_STRING, 1, "option 1" );
-	menu.appendItem( popups.createMenu.flags.MF_STRING, 2, "option 2" );
-	menu.appendItem( popups.createMenu.flags.MF_STRING, 3, "option 3" );
-	menu.appendItem( popups.createMenu.flags.MF_STRING, 4, "option 4" );
+	menu.addItem( "option 1", ()=>option(1) );
+	menu.addItem( "option 2", ()=>option(2) );
+	menu.separate();
+	menu.addItem( "option 3", ()=>option(3) );
+	menu.addItem( "option 4", ()=>option(4) );
+	function option(n) {
+		console.log( "trigggered option?", n );
+	}
 	return menu
 }
 
