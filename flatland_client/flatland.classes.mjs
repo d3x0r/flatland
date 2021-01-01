@@ -2,6 +2,9 @@
 let drawLine = null;
 //import {JSOX} from "jsox"
 import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
+let util = {format(...a) { return (a).join( ' ' ) } };
+if( "undefined" === typeof window )
+	import('util').then( u=>util = u );
 
 const localParseState = {
 	world : null,
@@ -657,9 +660,11 @@ class Wall extends PoolMember{
 			if( opts.startAtEnd ) {
 				ASSERT( opts.start.end === null )
 				opts.start.end = this;
+				opts.start.end_at_end = false;
 			} else {
 				ASSERT( opts.start.start === null )
 				opts.start.start = this;
+				opts.start.start_at_end = false;
 			}
 			this.start = opts.start;
 			this.start_at_end = opts.startAtEnd;
@@ -676,9 +681,11 @@ class Wall extends PoolMember{
 			if( opts.endAtEnd ) {
 				ASSERT( opts.end.end === null )
 				opts.end.end = this;
+				opts.end.end_at_end = true;
 			} else{
 				ASSERT( opts.end.start === null )
 				opts.end.start = this;
+				opts.end.start_at_end = true;
 			}
 			this.end = opts.end;
 			this.end_at_end = opts.endAtEnd;
@@ -1252,6 +1259,47 @@ class Sector extends PoolMember{
 			, w:this.wall&&this.wall.id
 		} );
 	}
+	checkWalls() {
+		const _debug = false;
+		const start = this.wall;
+		let check = this.wall;
+		const priorEnd = [false];
+		do {
+			const p1 = check.line.ptFrom;
+			const p2 = check.line.ptTo;
+			let e1, e2;
+			if( check.start_at_end ) {
+				_debug && console.log( "using end of start" );
+				e1 = check.start.line.ptTo;
+			}else {
+				_debug && console.log( "using start of start" );
+				e1 = check.start.line.ptFrom;
+			}
+			if( check.end_at_end ) {
+				_debug && console.log( "using end of end" );
+				e2 = check.end.line.ptTo;
+			}else{
+				_debug && console.log( "using start of end" );
+				e2 = check.end.line.ptFrom;
+			}
+			_debug && console.log( "Wall:", check.line.ptFrom, check.line.ptTo );
+			_debug && console.log( "Start:", check.start.line.ptFrom, check.start.line.ptTo );
+			_debug && console.log( "End:", check.end.line.ptFrom, check.end.line.ptTo );
+			_debug && console.log( "First check", check, p1, p2, e1, e2 );
+
+			if( !Near( p1, e1 ) ) throw new Error( "wall start is not mated correctly:"+ check.id + ";"+ util.format( check )
+					 + '\nP1:' + util.format(p1)
+					 + '\nE1:' + util.format(e1)
+                + "\nOther:" + check.end.id
+				);
+			if( !Near( p2, e2 ) ) throw new Error( "wall end is not mated correctly:"+ check.id + ";"+ util.format( check ) 
+					 + '\nP2:' + util.format(p2)
+					 + '\nE2:' + util.format(e2)
+                + "\nOther:" + check.end.id
+				);
+			check = check.next(priorEnd);
+		} while( check != start );
+	}
 	#ComputePointList() {
 		const temp = new Vector();
 		let plsCur;
@@ -1559,6 +1607,8 @@ class World {
 				, using:new Ray( new Vector( x+5,0 ), new Vector( 0, 1 ) )  
 					} );
 			
+
+		sector.checkWalls();
 		
 		const texture = this.getTexture( this.getName( "Default" ) );
 		if( !texture.flags.bColor )
