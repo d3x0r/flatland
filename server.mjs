@@ -70,15 +70,19 @@ class GameWorld {
 	delPlayer(ws) {
 		var idx = this.#playerList.find( p=>p===ws );
 		if( idx >= 0 )
-			this.#playerList.slice(idx,1);
+			this.#playerList.splice(idx,1);
 		else console.log( "Failed to find player to remove." );
 	}
 	send(from,msg) {
-		for( var to of this.#playerList ) {
-			if( to === from ) {
-
+		for( let p = 0; p < this.#playerList.length; p++ )
+		{
+			const to = this.#playerList[p];
+			if( to.readyState === 1)
+				to.send(msg );
+			else if( to.readyState == 3 ){
+				this.#playerList.splice(p, 1 );
+				p--; // recheck this spot.
 			}
-			to.send(msg );
 		}
 	}
 }

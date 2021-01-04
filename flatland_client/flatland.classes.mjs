@@ -210,33 +210,37 @@ class TextureMsg {
 	flags = null;
 }
 function buildTexturefromJSOX( field,val ) {
-	if( !field ) return this.texture;
-	console.log( "revive texture ield:", field );
-	switch( field ) {
-	case "flags":
-		return this.texture.flags;
-		//return val;
-	case "name":
-		this.texture.name = val;
-		return val;
-	} 
+	try {
+		if( !field ) return this.texture.set( this );
+		console.log( "revive texture ield:", field );
+		switch( field ) {
+		case "flags":
+			return this.texture.flags;
+			//return val;
+		case "name":
+			this.texture.name = val;
+			return val;
+		default:
+			return undefined;
+		} 
+	}catch(err) {
+		console.log( "Texture Recover failed:", err );
+	}
 }
 
 
-class Texture {
+class Texture extends PoolMember{
 	flags = { color : true };
 	color = null;
 	name = null;
-	set = null;
 
 	constructor(set) {
-		this.set = set;
+		super(set, Texture)
 	}
 	set(v) {
-		this.name = v;
-	}
-	get() {
-		return this.name;
+		this.color = v.color;
+		this.name = v.name;
+		return this;
 	}
 			
 	SetSolidColor(c) {
@@ -408,22 +412,26 @@ class LineMsg {
 	t = 0;
 }
 function buildLinefromJSOX( field,val ) {
-	if( !field ) return this.line;
-	console.log( "revive line f ield:", field );
-	switch( field ) {
-	case "from":
-		this.line.from = val;
-		break;
-	case "id":
-		this.line.id = val;
-		break;
-	case "r":
-		return this.line.r = val;
-		break;
-	case "to":
-		this.line.to = val;
-		break;
-	} 
+	try {
+		if( !field ) return this.line;
+		console.log( "revive line f ield:", field );
+		switch( field ) {
+		case "from":
+			this.line.from = val;
+			break;
+		case "id":
+			this.line.id = val;
+			break;
+		case "r":
+			return this.line.r = val;
+			break;
+		case "to":
+			this.line.to = val;
+			break;
+		} 
+	}catch(err) {
+		console.log( "Line failure:", err );
+	}
 }
 
 class Line extends PoolMember{
@@ -566,46 +574,54 @@ class WallMsg {
 }
 
 function buildWallfromJSOX( field,val ) {
-	if( !field ) return this.wall;
-	console.log( "revive wall field:", field, val );
-	switch( field ) {
-	case "end":
-		console.log( "WALL END SET TO :", val );
-		this.end = val;
-		if( val instanceof WallMsg )
-		this.wall.end = val.wall;
-		else
-		this.wall.end = val;
-		break;
-	case "end_at_end":
-		this.end_at_end = val;
-		break;
-	case "id":
-		this.wall.id = val;
-		break;
-	case "line":
-		this.line = val;
-		if( val instanceof LineMsg )
-			this.wall.line = val.line;
-		else
-			this.wall.line = val;
-		break;
-	case "into":
-		this.into = val;
-		this.wall.into = val && val;
-		break;
-	case "start":
-		this.start = val;
-		if( val instanceof WallMsg )
-		this.wall.start = val.wall;
-		else
-		this.wall.start = val;
-		break;
-	case "start_at_end":
-		this.wall.start_at_end = val;
-		break;
-	} 
-	return undefined;
+	try {
+		if( !field ) return this.wall;
+		console.log( "revive wall field:", field, val );
+		switch( field ) {
+		case "end":
+		    if( "undefined" === typeof val ) {
+		    	   console.log( "end wall is passed undefined. ");
+		    	   debugger;
+		    }
+			console.log( "WALL END SET TO :", val );
+			this.end = val;
+			if( val instanceof WallMsg )
+				this.wall.end = val.wall;
+			else
+				this.wall.end = val;
+			break;
+		case "end_at_end":
+			this.end_at_end = val;
+			break;
+		case "id":
+			this.wall.id = val;
+			break;
+		case "line":
+			this.line = val;
+			if( val instanceof LineMsg )
+				this.wall.line = val.line;
+			else
+				this.wall.line = val;
+			break;
+		case "into":
+			this.into = val;
+			this.wall.into = val && val;
+			break;
+		case "start":
+			this.start = val;
+			if( val instanceof WallMsg )
+			this.wall.start = val.wall;
+			else
+			this.wall.start = val;
+			break;
+		case "start_at_end":
+			this.wall.start_at_end = val;
+			break;
+		} 
+		return undefined;
+	}catch(err) {
+		console.log( "Error assembling wall:" );
+	}
 }
 
 function sectorToJSOX(stringifier ) {
@@ -1174,7 +1190,9 @@ class SectorMsg {
 }
 
 function buildSectorfromJSOX( field,val ) {
+	try {
 	if( !field ) {
+		this.sector.dirty = true;
 		return this.sector;
 	} else {
 		if( field === "id" ) { this.sector.id = val; return undefined; }
@@ -1186,6 +1204,9 @@ function buildSectorfromJSOX( field,val ) {
 		
 		console.log( "GET:", field );
 		return val;
+	}
+	}catch(err) {
+		console.log( "Failure in sector reviver:", err );
 	}
 }
 
@@ -1648,10 +1669,13 @@ class World {
 				this.#events[event] = [newEvent];
 		}
 		else{
-			console.log( "USING EVENT IN");
-			
+			console.log( "USING EVENT IN", event );
+			try {
 			if( event in this.#events ) {
 				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
+			}
+			}catch(err) {
+				console.log( "Callback event threw an error", err );
 			}
 		}
 	}
@@ -1705,12 +1729,18 @@ class WorldMsg {
 }
 
 function buildWorldfromJSOX( field, val ) {
+	try {
 	console.log( "FIELD:", field );
 	if( !field ) {
 		return this.world;
 	}
 	console.log( "returning pull array for array?", field, val );
 	return val;//this.world[field]
+}catch(err) {
+	console.log( "Error assembling world:", err );
+}
+
+	
 }
 
 /*

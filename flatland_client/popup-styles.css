@@ -77,16 +77,18 @@
 
 .frameContainer {
 	visibility:visible;
-	padding:0px;border-color:black;border-width:2px;
+	padding:0px;
+	border-color:black;
+	border-width:2px;
 	border-style:solid;
-        z-index:100;
-        position:absolute;
+	z-index:100;
+	position:absolute;
 	/*left:1024;
 	top:25%; */
 	width:max-content;
 	height:max-content;
 	background-color:rgba(150, 150, 150, 0.75);
-	color:rgb(133, 240, 229);
+	color: rgb(12 4 4);
 	border-radius:10px;
 	/*padding:25px;*/
 }
@@ -175,7 +177,7 @@
 }
 
 .fieldUnit:nth-child(odd){
-    background:#777;
+    background:#77777730;
 }
 .fieldUnit {
 	line-height:2em;
@@ -183,7 +185,8 @@
 	border-bottom-style:solid;
 	border-bottom-color:black;
     display: flex;
-    align-items: center;
+	align-items: center;
+	color:black;
     /*box-shadow: 0 0 10px rgba(64, 224, 208, 0.493);*/
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.893);
 	border-radius:50px;

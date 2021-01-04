@@ -162,6 +162,11 @@ function REAL_Y(y) { return REAL_SCALE(  y  )- l.yOfs}
 const Near = (a,b,d )=>a&&b&&( Math.abs(a.x-b.x) < d && Math.abs(a.y-b.y) < d  && Math.abs(a.z - b.z ) < d )
 const tmp = new Vector();
 
+const editorState = {
+	lockLineOrigin : false,
+	lockCreate : false,
+};
+
 let mouse = {
 	pos : new Vector()
 	,rpos : new Vector()
@@ -339,12 +344,20 @@ function canvasRedraw() {
 				mouse.CurSlope = check.line.to;
 				mouse.CurEnds[0] = check.from;
 				mouse.CurEnds[1] = check.to;
-
-				triangle( check.line.r.o.x, check.line.r.o.y, ( mouse.mouseLock.near === mouse.CurOrigin )?selectedHotSpot:wallOriginColor );
-				const end = check.to;
-				square( end.x, end.y, ( mouse.mouseLock.near === check.to )?selectedHotSpot:"rgb(0,0,0)" );
-				const start = check.from;
-				square( start.x, start.y, ( mouse.mouseLock.near === check.from )?selectedHotSpot:"rgb(0,0,0)" );
+				if( editorState.lockLineOrigin ){
+					triangle( check.line.r.o.x, check.line.r.o.y, ( mouse.mouseLock.near === mouse.CurOrigin )?selectedHotSpot:wallOriginColor );
+					const end = check.to;
+					square( end.x, end.y, ( mouse.mouseLock.near === check.to )?selectedHotSpot:"rgb(255,255,255)" );
+					const start = check.from;
+					square( start.x, start.y, ( mouse.mouseLock.near === check.from )?selectedHotSpot:"rgb(255,255,255)" );
+	
+				}else {
+					triangle( check.line.r.o.x, check.line.r.o.y, ( mouse.mouseLock.near === mouse.CurOrigin )?selectedHotSpot:wallOriginColor );
+					const end = check.to;
+					square( end.x, end.y, ( mouse.mouseLock.near === check.to )?selectedHotSpot:"rgb(0,0,0)" );
+					const start = check.from;
+					square( start.x, start.y, ( mouse.mouseLock.near === check.from )?selectedHotSpot:"rgb(0,0,0)" );
+				}
 			}
 			check = check.next(priorend);
 		}while( check !== start )
@@ -597,9 +610,8 @@ function setupWorld( world ) {
 	const popup = setupMenu();
 	canvas.requestPointerLock = canvas.requestPointerLock ||
                             canvas.mozRequestPointerLock;
-
+	editor.divContent.style.position = "relative";
 	canvas.requestPointerLock();
-
 
 	l.world = world;
 
@@ -725,9 +737,9 @@ function setupWorld( world ) {
 				}
 			  if(!( LockTo( mouse.CurSecOrigin, true, 'bSectorOrigin' )
 			  	||LockTo( mouse.CurOrigin, true, 'bOrigin' )
-			  //||LockTo( mouse.CurSlope, IsKeyDown( display->hVideo, KEY_SHIFT ), 'bSlope' )
-			  //||LockTo( mouse.CurEnds[0], !IsKeyDown( display->hVideo, KEY_SHIFT ),bEndStart )
-			  //||LockTo( mouse.CurEnds[1], !IsKeyDown( display->hVideo, KEY_SHIFT ),bEndEnd )
+			    ||LockTo( mouse.CurSlope, editorState.lockLineOrigin, 'bSlope' )
+			    ||LockTo( mouse.CurEnds[0], !editorState.lockLineOrigin,'CurEnds[0]' )
+			    ||LockTo( mouse.CurEnds[1], !editorState.lockLineOrigin,'CurEnds[1]' )
 			  ))
 
 			  if( !mouse.flags.bNormalMode )
@@ -828,6 +840,17 @@ function setupWorld( world ) {
 		mouse.mouseLock.drag = false;
 	})
 
+	document.body.addEventListener( "keydown", (evt)=>{
+		console.log( "key:", evt );
+		cs.value =  evt.shiftKey;
+		lo.value =  evt.ctrlKey;
+	})
+	document.body.addEventListener( "keyup", (evt)=>{
+		console.log( "key:", evt );
+		cs.value =  evt.shiftKey;
+		lo.value =  evt.ctrlKey;
+	})
+
 	canvas.addEventListener('contextmenu', function(evt){
 		evt.preventDefault();
 		evt.stopPropagation();
@@ -839,7 +862,18 @@ function setupWorld( world ) {
 	l.yOfs = (l.h/2)*l.scale;
 	
 	l.worldCtx= canvas.getContext( "2d" );
+
 	editor.appendChild( canvas );
+	const toggles = document.createElement( "div" );
+	toggles.style.position = "absolute";
+	toggles.style.left = 0;
+	toggles.style.top = 0;
+	const lo = popups.makeCheckbox( toggles, editorState, "lockLineOrigin", "Lock Origin");
+	lo.on("change",canvasRedraw);
+	const cs = popups.makeCheckbox( toggles, editorState, "lockCreate", "Create Sector");
+	cs.on("change",canvasRedraw);
+
+	editor.appendChild( toggles )
 
 	canvasRedraw();
 	console.log( "Okay world data:", world.name );
