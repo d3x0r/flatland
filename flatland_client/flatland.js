@@ -912,6 +912,7 @@ function processMessage( msg ) {
 		console.log( "add World Live" );
 		l.editor = selector.addWorld( msg.world );
 	} else if( msg.op === "Line" ) {
+		l.refresh = true;
 		l.world.lines[msg.id].set(JSOX.parse(msg.data));
 	} else if( msg.op === "Sector" ) {
 		l.world.sectors[msg.id].set(JSOX.parse(msg.data));
