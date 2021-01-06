@@ -3,8 +3,8 @@ let drawLine = null;
 //import {JSOX} from "jsox"
 import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
 let util = {format(...a) { return (a).join( ' ' ) } };
-if( "undefined" === typeof window )
-	import('util').then( u=>util = u );
+//if( "undefined" === typeof window )
+//	import('util').then( u=>util = u );
 
 const _debug_revive = false;
 const _debug_events = false;
@@ -463,22 +463,17 @@ class Line extends PoolMember{
 	}
 	set( opts ) {
 		if( opts instanceof Line ){
-			if( isNaN( l.r.n.x ) ) {
+			if( isNaN( opts.r.n.x ) ) {
 				console.trace( "Found NaN");
 			}
-			this.r.set( l.r );
-			this.from = l.from;
-			this.to = l.to;
+			this.r.set( opts.r );
+			this.from = opts.from;
+			this.to = opts.to;
 		}
 		else if( opts.line && opts.line instanceof Line ){
 			this.r.set( opts.ray.r );
 			this.from = opts.f;
 			this.to = opts.t;
-			console.log( "Set line:", opts );
-			if( isNan( this.r.o ) || isNan( this.n.o ) ){
-				console.trace( "UPDATING INVALID:", this);
-				process.exit(0)
-			}
 			return this;
 		} 
 
@@ -489,7 +484,6 @@ class Line extends PoolMember{
 			this.to = opts.t;
 		}else {
 			this.r = opts.ray;
-			console.log( "Set line2:", opts );
 			if( "number" === typeof opts.from ) {
 				this.from = opts.from;
 				this.to = opts.to;
@@ -815,10 +809,6 @@ class Wall extends PoolMember{
 			return true; // this is okay - we're just looping backwards.
 	
 		this.#flags.bUpdating = true;
-		if( this.line.r.o.x > 100 ){
-			console.log( "Dying.", this.line );
-			process.exit(0);
-		}
 		_debug_mating_update && console.log( "updateMating(1)", this.line.id, this.line );
 		//Log( "updateMating("STRSYM(__LINE__)")" );
 	
@@ -925,10 +915,6 @@ class Wall extends PoolMember{
 						ptOther.set(  wall.start.from );
 						// if original end != new end 
 						_debug_mating_update && console.log( "HERE:", plsStart, ptOther, ptStart )
-						if( _debug_mating_update && ( isNaN( ptStart.x) || isNaN( ptOther.x ))){
-							console.log( "found nan, failing" ); 
-							process.exit(0);
-						}
 						if( !Near( ptOther, ptStart ) )
 						{
 							ptOther.set(  pWall.start.to );
@@ -940,11 +926,6 @@ class Wall extends PoolMember{
 							plsStart.r.o.set( ptOther2 )
 							//SetPoint( plsStart.r.o, ptOther );
 							ptOther.sub( ptOther, ptStart )
-
-							if( !ptOther.x && !ptOther.y && !ptOther.z ) {
-								console.log( "Failing:", ptOther, ptStart );
-								debugger;
-							}
 
 							plsStart.r.n.set( ptOther );
 
@@ -1417,14 +1398,14 @@ class Sector extends PoolMember{
 			_debug && console.log( "End:", check.end.line.ptFrom, check.end.line.ptTo );
 			_debug && console.log( "First check", check, p1, p2, e1, e2 );
 
-			if( !Near( p1, e1 ) ) throw new Error( "wall start is not mated correctly:"+ check.id + ";"+ util.format( check )
-					 + '\nP1:' + util.format(p1)
-					 + '\nE1:' + util.format(e1)
+			if( !Near( p1, e1 ) ) throw new Error( "wall start is not mated correctly:"+ check.id + ";"+  check 
+					 + '\nP1:' + (p1)
+					 + '\nE1:' + (e1)
                 + "\nOther:" + check.end.id
 				);
-			if( !Near( p2, e2 ) ) throw new Error( "wall end is not mated correctly:"+ check.id + ";"+ util.format( check ) 
-					 + '\nP2:' + util.format(p2)
-					 + '\nE2:' + util.format(e2)
+			if( !Near( p2, e2 ) ) throw new Error( "wall end is not mated correctly:"+ check.id + ";"+ ( check ) 
+					 + '\nP2:' + (p2)
+					 + '\nE2:' + (e2)
                 + "\nOther:" + check.end.id
 				);
 			check = check.next(priorEnd);
