@@ -6,6 +6,10 @@ let util = {format(...a) { return (a).join( ' ' ) } };
 if( "undefined" === typeof window )
 	import('util').then( u=>util = u );
 
+const _debug_revive = false;
+const _debug_events = false;
+const _debug_mating_update = false;
+
 const localParseState = {
 	world : null,
 	
@@ -163,12 +167,12 @@ class NameMsg{
 }
 function buildNamefromJSOX( field,val ) {
 	if( !field ) return this.name;
-	console.log( "revive name field:", field );
+	_debug_revive && console.log( "revive name field:", field );
 	switch( field ) {
 	case "flags":
 		return this.name.flags;
 	case "id":
-		console.log("OVERRIDE ID?", val, this.name.id );
+		_debug_revive && console.log("OVERRIDE ID?", val, this.name.id );
 		this.name.id = val;
 		return undefined;
 	case "name":
@@ -210,22 +214,17 @@ class TextureMsg {
 	flags = null;
 }
 function buildTexturefromJSOX( field,val ) {
-	try {
-		if( !field ) return this.texture.set( this );
-		console.log( "revive texture ield:", field );
-		switch( field ) {
-		case "flags":
-			return this.texture.flags;
-			//return val;
-		case "name":
-			this.texture.name = val;
-			return val;
-		default:
-			return undefined;
-		} 
-	}catch(err) {
-		console.log( "Texture Recover failed:", err );
-	}
+	if( !field ) return this.texture.set( this );
+	_debug_revive && console.log( "revive texture ield:", field );
+	switch( field ) {
+	case "flags":
+		return this.texture.flags;
+	case "name":
+		this.texture.name = val;
+		return val;
+	default:
+		return undefined;
+	} 
 }
 
 
@@ -269,6 +268,9 @@ class Vector {
 			}
 		}
 	set(v) { 
+		if( isNaN( v.x ) ) {
+			console.trace( "found Nan setting vector", this, v );
+		}
 		this.x = v.x; this.y = v.y;this.z = v.z;
 		return this;}
 	sum(v ) {
@@ -281,6 +283,12 @@ class Vector {
 		this.x = a.x - b.x;
 		this.y = a.y - b.y;
 		this.z = a.z - b.z;
+		return this;
+	}
+	add(a,b ) {
+		this.x = a.x + b.x;
+		this.y = a.y + b.y;
+		this.z = a.z + b.z;
 		return this;
 	}
 	scale(t ) {
@@ -414,7 +422,7 @@ class LineMsg {
 function buildLinefromJSOX( field,val ) {
 	try {
 		if( !field ) return this.line;
-		console.log( "revive line f ield:", field );
+		_debug_revive && console.log( "revive line f ield:", field );
 		switch( field ) {
 		case "from":
 			this.line.from = val;
@@ -454,20 +462,34 @@ class Line extends PoolMember{
 		return JSOX.stringify( {id:this.id,r:this.r, t:this.to,f:this.from});
 	}
 	set( opts ) {
-		if( opts.line && opts.line instanceof Line ){
+		if( opts instanceof Line ){
+			if( isNaN( l.r.n.x ) ) {
+				console.trace( "Found NaN");
+			}
+			this.r.set( l.r );
+			this.from = l.from;
+			this.to = l.to;
+		}
+		else if( opts.line && opts.line instanceof Line ){
 			this.r.set( opts.ray.r );
 			this.from = opts.f;
 			this.to = opts.t;
+			console.log( "Set line:", opts );
+			if( isNan( this.r.o ) || isNan( this.n.o ) ){
+				console.trace( "UPDATING INVALID:", this);
+				process.exit(0)
+			}
 			return this;
 		} 
 
-		if( "id" in opts ) { 
+		else if( "id" in opts ) { 
 			if( opts.id !== this.id ) throw new Error( "Mismatch ID");
 			this.r.set( opts.r );
 			this.from = opts.f;
 			this.to = opts.t;
 		}else {
 			this.r = opts.ray;
+			console.log( "Set line2:", opts );
 			if( "number" === typeof opts.from ) {
 				this.from = opts.from;
 				this.to = opts.to;
@@ -483,11 +505,6 @@ class Line extends PoolMember{
 	}
 	get ptTo() {
 		return this.#pTo.addScaled( this.r.o, this.r.n, this.to );
-	}
-	setFromm(l){
-		this.r.set( l.r );
-		this.from = l.from;
-		this.to = l.to;
 	}
 	intersect( bEnd1, pLine2, bEnd2 )
 	{
@@ -544,7 +561,7 @@ class Line extends PoolMember{
 			return false;
 		}
 	}
-		
+	
 };
 
 Line.makeOpenLine = function( r ) {
@@ -574,54 +591,50 @@ class WallMsg {
 }
 
 function buildWallfromJSOX( field,val ) {
-	try {
-		if( !field ) return this.wall;
-		console.log( "revive wall field:", field, val );
-		switch( field ) {
-		case "end":
-		    if( "undefined" === typeof val ) {
-		    	   console.log( "end wall is passed undefined. ");
-		    	   debugger;
-		    }
-			console.log( "WALL END SET TO :", val );
-			this.end = val;
-			if( val instanceof WallMsg )
-				this.wall.end = val.wall;
-			else
-				this.wall.end = val;
-			break;
-		case "end_at_end":
-			this.end_at_end = val;
-			break;
-		case "id":
-			this.wall.id = val;
-			break;
-		case "line":
-			this.line = val;
-			if( val instanceof LineMsg )
-				this.wall.line = val.line;
-			else
-				this.wall.line = val;
-			break;
-		case "into":
-			this.into = val;
-			this.wall.into = val && val;
-			break;
-		case "start":
-			this.start = val;
-			if( val instanceof WallMsg )
-			this.wall.start = val.wall;
-			else
-			this.wall.start = val;
-			break;
-		case "start_at_end":
-			this.wall.start_at_end = val;
-			break;
-		} 
-		return undefined;
-	}catch(err) {
-		console.log( "Error assembling wall:" );
-	}
+	if( !field ) return this.wall;
+	_debug_revive && console.log( "revive wall field:", field, val );
+	switch( field ) {
+	case "end":
+		if( "undefined" === typeof val ) {
+				console.log( "end wall is passed undefined. ");
+				debugger;
+		}
+		_debug_revive && console.log( "WALL END SET TO :", val );
+		this.end = val;
+		if( val instanceof WallMsg )
+			this.wall.end = val.wall;
+		else
+			this.wall.end = val;
+		break;
+	case "end_at_end":
+		this.end_at_end = val;
+		break;
+	case "id":
+		this.wall.id = val;
+		break;
+	case "line":
+		this.line = val;
+		if( val instanceof LineMsg )
+			this.wall.line = val.line;
+		else
+			this.wall.line = val;
+		break;
+	case "into":
+		this.into = val;
+		this.wall.into = val && val;
+		break;
+	case "start":
+		this.start = val;
+		if( val instanceof WallMsg )
+		this.wall.start = val.wall;
+		else
+		this.wall.start = val;
+		break;
+	case "start_at_end":
+		this.wall.start_at_end = val;
+		break;
+	} 
+	return undefined;
 }
 
 function sectorToJSOX(stringifier ) {
@@ -636,6 +649,8 @@ function wallToJSOX(stringifier) {
 	//console.log( "Stringify wall mirror:", mirror );
 	return stringifier.stringify( mirror );
 }
+
+
 class Wall extends PoolMember{
 	#flags = {
 		bUpdating : false, // set this while updating to prevent recursion..
@@ -792,6 +807,7 @@ class Wall extends PoolMember{
 		let ptStart, ptEnd;
 		let lsStartSave, lsEndSave;
 		let ptOther = new Vector();
+		let ptOther2 = new Vector();
 		bErrorOK = true; // DUH! 
 
 		// this wall moved, so for all mating lines, update this beast.
@@ -799,8 +815,12 @@ class Wall extends PoolMember{
 			return true; // this is okay - we're just looping backwards.
 	
 		this.#flags.bUpdating = true;
-		console.log( "UpdateMating(1)" );
-		//Log( "UpdateMating("STRSYM(__LINE__)")" );
+		if( this.line.r.o.x > 100 ){
+			console.log( "Dying.", this.line );
+			process.exit(0);
+		}
+		_debug_mating_update && console.log( "updateMating(1)", this.line.id, this.line );
+		//Log( "updateMating("STRSYM(__LINE__)")" );
 	
 		if( this.countWalls( ) < 4 )
 		{
@@ -808,7 +828,7 @@ class Wall extends PoolMember{
 			bErrorOK = true;
 		}
 	
-		//Log( "UpdateMating("STRSYM(__LINE__)")" );
+		//Log( "updateMating("STRSYM(__LINE__)")" );
 		const wall = this;
 		if( !bLockSlope )
 		{
@@ -817,12 +837,16 @@ class Wall extends PoolMember{
 			while(redo){
 				redo = false;
 				ptStart = wall.line.ptFrom;
+				if( isNaN( ptStart.x ) ){
+					console.trace( "Wall from is already bad.", ptStart, wall.line );
+				}
 				ptEnd = wall.line.ptTo;
 			//Readjust:   
 				pStart = wall.start;
 				pEnd = wall.end;
 				plsStart = pStart.line;
 				plsEnd = pEnd.line;
+				_debug_mating_update && console.log( "walls start:", plsStart.id, plsStart, plsEnd.id, plsEnd )
 				lsStartSave = new Line( { line:pStart.line} );
 				lsEndSave = new Line( {line:pEnd.line} );
 				// check opposite any other walls other than those 
@@ -853,39 +877,37 @@ class Wall extends PoolMember{
 					}while( pCur != pWall );
 				}
 		
-				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				_debug_mating_update && console.log( "updateMating(2)", plsStart.ptFrom, new Error().stack.split('\n')[1].trim()  );
 				if( pWall.start_at_end )
 				{
+					//console.log( "111111111111111111111111111111111111" );
 					// compute start point..
 					if( !pStart.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther.set(  plsStart.ptTo);
+						ptOther.set(  pWall.start.to );
 						// if original end != new end 
 						if( !Near( ptOther, ptStart ) ) 
 						{
-							let pOtherWall = pStart.start;
-							let plsOther = pOtherWall.line;
 
-							if( pStart.start_at_end )
-								ptOther.set(  plsOther.ptTo );
-							else
-								ptOther.set(  plsOther.ptFrom );
-		
-							plsStart.from = 0;
-							plsStart.to = 1;
-							plsStart.r.o.set( ptOther );
-							ptOther.sub( ptStart, ptOther );
+							ptOther.set(  pWall.start.from );
+
+							plsStart.from = -0.5;
+							plsStart.to = 0.5;
+
+							plsStart.r.o.set( ptOther2.add( ptStart, ptOther ).scale( 0.5 ) );
+							plsStart.r.n.set( ptOther.sub( ptStart, ptOther ) );
+							
 							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
-							plsStart.r.n.set( ptOther );
 							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
+							walls.push( pStart );
 							if( pStart.into )
 							{
 								pStart.#flags.bUpdating = true;
-								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								if( !pStart.into.updateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pStart.#flags.bUpdating = false;
-									plsStart.setFrom( lsStartSave );
+									plsStart.set( lsStartSave );
 									return UpdateResult( false );
 								}
 								pStart.#flags.bUpdating = false;
@@ -895,38 +917,47 @@ class Wall extends PoolMember{
 				}
 				else  // ( !pWall.start_at_end )
 				{
+					//console.log( "22222222222222222222222222222222222222222" );
 					// compute end point..
 					if( !pStart.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther.set(  plsStart.ptFrom );
+						ptOther.set(  wall.start.from );
 						// if original end != new end 
-						console.log( "HERE:", plsStart, ptOther, ptStart )
+						_debug_mating_update && console.log( "HERE:", plsStart, ptOther, ptStart )
+						if( _debug_mating_update && ( isNaN( ptStart.x) || isNaN( ptOther.x ))){
+							console.log( "found nan, failing" ); 
+							process.exit(0);
+						}
 						if( !Near( ptOther, ptStart ) )
 						{
-							let pOtherWall = pStart.end;
-							let plsOther = pOtherWall.line;
-							if( pStart.end_at_end )
-								ptOther.set( plsOther.to );
-							else
-								ptOther.set( plsOther.from );
+							ptOther.set(  pWall.start.to );
 
-							plsStart.from = -1;
-							plsStart.to = 0;
-							plsStart.r.o.set( ptOther )
+							plsStart.from = -0.5;
+							plsStart.to = 0.5;
+							ptOther2.add( ptOther, ptStart ).scale( 0.5 );
 
+							plsStart.r.o.set( ptOther2 )
 							//SetPoint( plsStart.r.o, ptOther );
 							ptOther.sub( ptOther, ptStart )
-							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
+
+							if( !ptOther.x && !ptOther.y && !ptOther.z ) {
+								console.log( "Failing:", ptOther, ptStart );
+								debugger;
+							}
+
 							plsStart.r.n.set( ptOther );
+
+
 							//DrawLineSeg( plsStart, Color( 0, 0, 255 ) );
+							walls.push( pStart );
 							if( pStart.into )
 							{
 								pStart.#flags.bUpdating = true;
-								if( !pStart.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								if( !pStart.into.updateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pStart.flags.bUpdating = false;
-									plsStart.setFrom( lsStartSave );
+									plsStart.set( lsStartSave );
 									return UpdateResult( false );
 								}
 								pStart.#flags.bUpdating = false;
@@ -938,38 +969,40 @@ class Wall extends PoolMember{
 						}
 					}
 				}
-				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				//Log( "updateMating("STRSYM(__LINE__)")" );
 				if( pWall.end_at_end )
 				{
+					//console.log( "333333333333333333333333333333333" );
 					if( !pEnd.#flags.bUpdating )
 					{
 						// compute original end of this line
-						ptOther.set(  plsEnd.ptTo);
+						ptOther.set(  pWall.end.to );
 						// if original end != new end 
 						if( !Near( ptOther, ptEnd ) )
 						{
-							let pOtherWall = pEnd.start;
-							let plsOther = pOtherWall.line;
 
-							if( pEnd.start_at_end )
-								ptOther.set( plsOther.ptTo);
-							else
-								ptOther.set( plsOther.ptFrom );
-							plsEnd.from = 0;
-							plsEnd.to = 1;
-							plsEnd.r.o.set( ptOther );
+							ptOther.set( pWall.end.from );
+
+							plsEnd.from = -0.5;
+							plsEnd.to = 0.5;
+
+							ptOther2.add( ptOther, ptEnd ).scale( 0.5 );
+
+							plsEnd.r.o.set( ptOther2 )
 							ptOther.sub( ptEnd, ptOther );
 							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
+							_debug_mating_update && console.log( "So this should have a NaN?", ptOther );
 							plsEnd.r.n.set( ptOther );
 							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
+							walls.push( pEnd );
 							if( pEnd.into )
 							{
 								pEnd.#flags.bUpdating = true;
-								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								if( !pEnd.into.updateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pEnd.#flags.bUpdating = false;
-									plsStart.setFrom( lsStartSave );
-									plsEnd.setFrom( lsEndSave );
+									plsStart.set( lsStartSave );
+									plsEnd.set( lsEndSave );
 									return UpdateResult( false );
 								}   
 		
@@ -981,36 +1014,38 @@ class Wall extends PoolMember{
 				else	//(!pWall.end_at_end)
 				{
 					// compute end point
+					//console.log( "44444444444444444444444444444444" );
 					if( !pEnd.#flags.bUpdating )
 					{
-		
 						// compute original end of this line
-						ptOther.set(  plsEnd.ptFrom);
+						ptOther.set(  pWall.end.from );
+
 						// if original end != new end 
 						if( !Near( ptOther, ptEnd ) )
 						{
-							let pOtherWall =  pEnd.end;
-							let plsOther = pOtherWall.line;
+							// so end is opposite
+							ptOther.set( pWall.end.to );
+							
+							plsEnd.from = -0.5;
+							plsEnd.to = 0.5;
 
-							if( pEnd.end_at_end )
-								ptOther.set( plsOther.ptTo);
-							else
-								ptOther.set( plsOther.ptFrom);
-							plsEnd.from = -1;
-							plsEnd.to = 0;
-							plsEnd.r.o.set( ptOther );
+							plsEnd.r.o.set( ptOther2.add( ptOther, ptEnd ).scale( 0.5 ) )
+
 							ptOther.sub( ptOther, ptEnd );
 							if( !ptOther.x && !ptOther.y && !ptOther.z ) debugger;
 							plsEnd.r.n.set( ptOther );
+							
+
 							//DrawLineSeg( plsEnd, Color( 0, 0, 255 ) );
+							walls.push( pEnd );
 							if( pEnd.into )
 							{
 								pEnd.#flags.bUpdating = true;
-								if( !pEnd.into.UpdateMating( walls, false/*bLockSlope*/, bErrorOK ) )
+								if( !pEnd.into.updateMating( walls, false/*bLockSlope*/, bErrorOK ) )
 								{
 									pEnd.#flags.bUpdating = false;
-									plsStart.setFrom( lsStartSave );
-									plsEnd.setFrom( lsEndSave );
+									plsStart.set( lsStartSave );
+									plsEnd.set( lsEndSave );
 									return UpdateResult( false );
 								}
 								pEnd.#flags.bUpdating = false;
@@ -1020,7 +1055,7 @@ class Wall extends PoolMember{
 				}
 				// check to see if we crossed the mating lines..
 				// if so - uncross them.
-				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				//Log( "updateMating("STRSYM(__LINE__)")" );
 				if( !bErrorOK )
 				{
 					let r;
@@ -1070,14 +1105,14 @@ class Wall extends PoolMember{
 					{
 						// if either segment intersects the other during itself..
 						// then this is an invalid update.. 
-						plsStart.setFrom( lsStartSave );
-						plsEnd.setFrom( lsEndSave );
+						plsStart.set( lsStartSave );
+						plsEnd.set( lsEndSave );
 						return UpdateResult( false );
 					}
 					// this is still insufficient.. and should continue to check
 					// remaining segments..
 				}
-				//Log( "UpdateMating("STRSYM(__LINE__)")" );
+				//Log( "updateMating("STRSYM(__LINE__)")" );
 
 				this.#sector.dirty = true;
 				//ComputeSectorPointList( iWorld, pWall.iSector, NULL );
@@ -1132,7 +1167,7 @@ class Wall extends PoolMember{
 						plsStart.to = r.t2;
 					else
 						plsStart.from = r.t2;
-					pWall.start.UpdateMating( walls, false, true );
+					pWall.start.updateMating( walls, false, true );
 				}
 				else
 				{
@@ -1148,7 +1183,7 @@ class Wall extends PoolMember{
 						plsEnd.to = r.t2;
 					else
 						plsEnd.from = r.t2;
-					pWall.end.UpdateMating( walls, false, true );
+					pWall.end.updateMating( walls, false, true );
 				}
 				else
 				{
@@ -1161,7 +1196,7 @@ class Wall extends PoolMember{
 		{
 			// only the orogiinal slopes can be locked..
 			// the mating sector might have to move his wall slope.
-			if( !pWall.into.UpdateMating( walls, false /*bLockSlope*/, bErrorOK ) )
+			if( !pWall.into.updateMating( walls, false /*bLockSlope*/, bErrorOK ) )
 				return UpdateResult( false );
 		}
 		// posts line update too.
@@ -1171,6 +1206,80 @@ class Wall extends PoolMember{
 		pWall.#sector.dirty = true;
 		return UpdateResult( true );
 	
+	}
+
+	move( x, y, lock ) {
+		this.line.r.o.x += x;
+		this.line.r.o.y += y;
+		const walls = [];		
+		this.updateMating( walls, true, false );
+		for( let wall of walls )
+			wall.line.on("update", wall.line );
+	}
+
+	turn( x, y, lock ) {
+		this.line.r.n.x += x;
+		this.line.r.n.y += y;
+		const walls = [];		
+		this.updateMating( walls, true, false );
+		this.line.on("update", this.line );
+		for( let wall of walls )
+			wall.line.on("update", wall.line );
+
+	}
+
+	setStart(x,y, lock){
+		const startWas = this.from;
+		const endWas = this.to;
+
+		const newX = startWas.x + x;
+		const newY = startWas.y + y;
+		const newZ = startWas.z + 0;
+
+		this.line.r.o.x = (newX + endWas.x)/2
+		this.line.r.o.y = (newY + endWas.y)/2
+		this.line.r.o.z = (newZ + endWas.z)/2
+		this.line.from = -0.5;
+		this.line.to = 0.5;
+		this.line.r.n.x = endWas.x - newX;
+		this.line.r.n.y = endWas.y - newY;
+		this.line.r.n.z = endWas.z - newZ;
+
+		const walls = [];		
+		if( this.updateMating( walls, lock, false ) ) {
+		//console.log( "Update list:", walls.length );
+		for( let wall of walls ) {
+			//console.log( "Sending wall ", wall.id );
+			wall.line.on("update", wall.line );
+		}
+		}
+		//console.log( "LINE RESULT after:", this.line.r, this.line );
+
+	}
+	setEnd(x,y, lock){
+		const startWas = this.from;
+		const endWas = this.to;
+
+		const newX = endWas.x + x;
+		const newY = endWas.y + y;
+		const newZ = endWas.z + 0;
+
+		this.line.r.o.x = (startWas.x + newX)/2
+		this.line.r.o.y = (startWas.y + newY)/2
+		this.line.r.o.z = (startWas.z + newZ)/2
+		this.line.from = -0.5;
+		this.line.to = 0.5;
+		this.line.r.n.x = newX - startWas.x;
+		this.line.r.n.y = newY - startWas.y;
+		this.line.r.n.z = newZ - startWas.z;
+
+		const walls = [];		
+		if( this.updateMating( walls, lock, false ) ){
+		//console.log( "Update list2:", walls.length );
+		for( let wall of walls )
+			wall.line.on("update", wall.line );
+		}
+
 	}
 
 	
@@ -1431,7 +1540,7 @@ class Sector extends PoolMember{
 		return null;
 	}
 	
-	move(x,y) {
+	move(x,y, lock) {
 		const pStart = this.wall;
 		let pCur = pStart;
 		let priorend = [true];
@@ -1444,7 +1553,7 @@ class Sector extends PoolMember{
 		}while( pCur != pStart );
 		const walls = [];
 		do {
-			pCur.updateMating( walls, false, false )
+			pCur.updateMating( walls, lock, false )
 			pCur = pCur.next( priorend );
 		}while( pCur != pStart );
 		//console.log( "Resulting move moved", walls.length, "walls" );
@@ -1650,10 +1759,10 @@ class World {
 	}
 
 
-	moveSector( id, x, y ){
+	moveSector( id, x, y, lock ){
 		const sector = this.sectors[id];
 		console.log( "move sector:", sector, id, x, y );
-		const walls = sector.move( x, y );
+		const walls = sector.move( x, y, lock );
 		//console.log( "TRIGGER UPDATE", walls, this.#events );
 		if( walls.length )
 			this.on( "update" );
@@ -1661,7 +1770,7 @@ class World {
 
 	on( event, data, data2 ) {
 		if( "function" === typeof data ) {
-			console.log( "REGSITERING EVENT IN");
+			_debug_events && console.log( "REGSITERING EVENT IN");
 			const newEvent = {cb:data,param:data2};
 			if( event in this.#events )
 				this.#events[event].push( newEvent );
@@ -1669,7 +1778,7 @@ class World {
 				this.#events[event] = [newEvent];
 		}
 		else{
-			console.log( "USING EVENT IN", event );
+			_debug_events && console.log( "USING EVENT IN", event );
 			try {
 			if( event in this.#events ) {
 				this.#events[event].forEach( cb=>cb.cb.call(cb.param,data,data2) );
@@ -1729,18 +1838,11 @@ class WorldMsg {
 }
 
 function buildWorldfromJSOX( field, val ) {
-	try {
-	console.log( "FIELD:", field );
+	//console.log( "FIELD:", field );
 	if( !field ) {
 		return this.world;
 	}
-	console.log( "returning pull array for array?", field, val );
-	return val;//this.world[field]
-}catch(err) {
-	console.log( "Error assembling world:", err );
-}
-
-	
+	return val;//this.world[field]  /// element allocation comes directly from the correct arrays anyway.
 }
 
 /*

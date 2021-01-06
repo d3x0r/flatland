@@ -207,18 +207,31 @@ server.onconnect( function (ws) {
 					} );	
 				}
 		} else if( msg.op === "move" ) {
-			console.log( "Server should use this to update also...");
+			//console.log( "Server should use this to update also...");
 			if( msg.t === 'S' ) {
-				ws.World.moveSector( msg.id, msg.x, msg.y );
+				ws.World.moveSector( msg.id, msg.x, msg.y, msg.lock );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
 			if( msg.t === 'o' ) {
-				//world.walls[msg.wall].move( msg.x, msg.y );
+				ws.World.walls[msg.id].move( msg.x, msg.y, msg.lock );
+				ws.World.on("update" );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
-			if( msg.t === 'n' ) {
+			if( msg.t === 's' ) {
+				ws.World.walls[msg.id].turn( msg.x, msg.y, msg.lock );
+				ws.World.on("update" );
+				//const m = JSOX.stringify(msg );
+				//ws.world.send( ws, m );
+			}
+			if( msg.t === 'e0' ) {
+				ws.World.walls[msg.id].setStart( msg.x, msg.y, msg.lock );
+				ws.World.on("update" );
+			}
+			if( msg.t === 'e1' ) {
+				ws.World.walls[msg.id].setEnd( msg.x, msg.y, msg.lock );
+				ws.World.on("update" );
 				//world.walls[msg.wall].move( msg.x, msg.y );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
@@ -301,9 +314,13 @@ server.onconnect( function (ws) {
 
 function setupWorldEvents(newWorld, world) {
 	const sendBuffer = [];
+	const lines = [];
 	world.on( "update", ()=>{
+		for( let line of lines )
+			sendBuffer.push({op:'Line',id:line.id,data:line.toJSOX() });
+
 		const buf = sendBuffer.map( (b)=>JSOX.stringify(b) ).join('');
-		console.log( "--- WORLD UPDATE flush pending changes to all ----", buf );
+		//console.log( "--- WORLD UPDATE flush pending changes to all ----", buf );
 		sendBuffer.length = 0;
 		newWorld.send( null, buf );
 	} );
@@ -315,7 +332,9 @@ function setupWorldEvents(newWorld, world) {
 		sendBuffer.push({op:"Sector", id:sector.id,data:sector.toJSOX()});
 	} );
 	world.lineSet.on( "update", (line)=>{
-		sendBuffer.push({op:'Line',id:line.id,data:line.toJSOX() });
+		if( !lines.find( l=>l===line )){
+			lines.push( line );
+		}
 	} );
 
 	world.wallSet.on( "create", (wall)=>{

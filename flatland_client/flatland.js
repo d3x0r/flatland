@@ -165,6 +165,7 @@ const tmp = new Vector();
 const editorState = {
 	lockLineOrigin : false,
 	lockCreate : false,
+	lockSlope : false, 
 };
 
 let mouse = {
@@ -702,15 +703,15 @@ function setupWorld( world ) {
 		}
 		if( mouse.mouseLock.drag && mouse.mouseLock.near ) {
 			if(mouse.mouseLock.to === "CurSecOrigin")
-				l.ws.send( `{op:move,t:S,id:${mouse.CurSector.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:S,id:${mouse.CurSector.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurEnds[0]")
-				l.ws.send( `{op:move,t:e0,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:e0,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "curEnds[1]")
-				l.ws.send( `{op:move,t:e1,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:e1,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurSlope")
-				l.ws.send( `{op:move,t:s,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:s,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
 			if(mouse.mouseLock.to === "CurOrigin")
-				l.ws.send( `{op:move,t:o,id:${mouse.CurWall.id},x:${rx},y:${ry}}`)
+				l.ws.send( `{op:move,t:o,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
 		}
 
 		else {
@@ -872,6 +873,8 @@ function setupWorld( world ) {
 	lo.on("change",canvasRedraw);
 	const cs = popups.makeCheckbox( toggles, editorState, "lockCreate", "Create Sector");
 	cs.on("change",canvasRedraw);
+	const ls = popups.makeCheckbox( toggles, editorState, "lockSlope", "Lock Slopes");
+	ls.on("change",canvasRedraw);
 
 	editor.appendChild( toggles )
 
