@@ -6878,7 +6878,9 @@ const tmp = new Vector();
 const editorState = {
   lockLineOrigin: false,
   lockCreate: false,
-  lockSlope: false
+  lockSlope: false,
+  commandClick: false,
+  lockDrag: false
 };
 let mouse = {
   pos: new Vector(),
@@ -7274,10 +7276,12 @@ function drawCursor() {
 
 function setupMenu() {
   const menu = popups.createMenu();
-  menu.addItem("option 1", () => option(1));
-  menu.addItem("option 2", () => option(2));
+  menu.addItem("Merge Walls", () => option(1));
+  menu.addItem("Break Wall", () => option(2));
   menu.separate();
-  menu.addItem("option 3", () => option(3));
+  menu.addItem("More Options?", () => option(3));
+  const childMenu = menu.addMenu("Sub Menu...");
+  childMenu.addItem("...");
   menu.addItem("option 4", () => option(4));
 
   function option(n) {
@@ -7322,11 +7326,11 @@ function setupWorld(world) {
     evt.preventDefault();
     evt.stopPropagation();
 
-    if (evt.buttons & 2) {
+    if (evt.buttons & 2 || evt.buttons & 1 && editorState.commandClick
+    /*event.metaKey*/
+    ) {
       evt.stopPropagation();
-      popup.show(null, evt.clientX, evt.clientY, val => {
-        console.log("Popup Value:", val);
-      });
+      popup.show(null, evt.clientX, evt.clientY);
     } else {
       var rect = canvas.getBoundingClientRect();
       const x = evt.clientX - rect.left;
@@ -7466,11 +7470,22 @@ function setupWorld(world) {
     console.log("key:", evt);
     cs.value = evt.shiftKey;
     lo.value = evt.ctrlKey;
+    cmd.value = evt.metaKey;
+
+    if (evt.code === "Tab") {
+      evt.preventDefault();
+      ld.value = !ld.value;
+    }
   });
   document.body.addEventListener("keyup", evt => {
     console.log("key:", evt);
     cs.value = evt.shiftKey;
     lo.value = evt.ctrlKey;
+    cmd.value = evt.metaKey;
+
+    if (evt.code === "Tab") {
+      evt.preventDefault(); //ld.value = !ld.value;
+    }
   });
   canvas.addEventListener('contextmenu', function (evt) {
     evt.preventDefault();
@@ -7487,12 +7502,16 @@ function setupWorld(world) {
   toggles.style.position = "absolute";
   toggles.style.left = 0;
   toggles.style.top = 0;
+  const cmd = popups.makeCheckbox(toggles, editorState, "commandClick", "⌘"); //cmd.on("change",canvasRedraw);
+
   const lo = popups.makeCheckbox(toggles, editorState, "lockLineOrigin", "Lock Origin");
   lo.on("change", canvasRedraw);
   const cs = popups.makeCheckbox(toggles, editorState, "lockCreate", "Create Sector");
   cs.on("change", canvasRedraw);
   const ls = popups.makeCheckbox(toggles, editorState, "lockSlope", "Lock Slopes");
   ls.on("change", canvasRedraw);
+  const ld = popups.makeCheckbox(toggles, editorState, "lockDrag", "Lock Drag"); //ld.on("change",canvasRedraw);
+
   editor.appendChild(toggles);
   canvasRedraw();
   console.log("Okay world data:", world.name);
