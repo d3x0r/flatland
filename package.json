@@ -11,8 +11,8 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "@d3x0r/popups": "latest",
-    "jsox": "^1.2.106",
+    "@d3x0r/popups": "1.0.102",
+    "jsox": "latest",
     "sack.vfs": "latest"
   },
   "repository": {
