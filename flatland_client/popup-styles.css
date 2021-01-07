@@ -195,7 +195,8 @@
 }
 .rightJustify {
 	margin-left: auto;
-	float:right;
+	/* float:right; */
+	/* clear: both; */
 }
 
 .checkOption{

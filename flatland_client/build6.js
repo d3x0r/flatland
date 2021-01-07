@@ -3850,7 +3850,7 @@ class SimpleNotice extends Popup {
   constructor(title, question, ok, cancel) {
     super(title, null);
     const form = document.createElement("form");
-    const okay = makeButton(form, "Okay", () => {
+    this.okay = makeButton(form, "Okay", () => {
       this.hide();
       ok && ok();
     });
