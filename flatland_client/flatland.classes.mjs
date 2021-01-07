@@ -1791,6 +1791,7 @@ class World {
 }
 
 const tmp = null;
+/** @nocollapse */
 World.fromJSOX = function( field,val ) {
 	if( !field ) {
 		if( this instanceof WorldMsg ){
@@ -1802,7 +1803,7 @@ World.fromJSOX = function( field,val ) {
 		return undefined;
 	}
 }
-
+/** @nocollapse */
 World.toJSOX = function(stringifier) {
 	return this.toJSOX(stringifier);
 }
