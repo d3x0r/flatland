@@ -2,11 +2,24 @@
 <head>
 <title>Flatland First Client</title>
 <style>
-.AppContainer {
+#AppContainer {
 	color:turquoise;
 	background-color:black;
 	position:relative;
 }
+#loginSrvc{
+	position:relative;
+	width:100vw;
+	height:100vh;
+	overflow:hidden;
+}
+iframe#loginSrvc{
+	border-width:0;
+	border-style:none;
+
+}
+
+
 </style>
 <link rel="stylesheet" href="./popup-styles.css">
 </head>
@@ -14,8 +27,10 @@
 <div id="AppContainer" style="position:absolute">
 <CANVAS WIDTH=1000 height=1000 ID="testSurface"></CANVAS>
 </div>
+
 </body>
-<!--SCRIPT type="module" src="./flatland.js"></script-->
-<SCRIPT type="module" src="./build6.js"></script>
+<SCRIPT type="module" src="./flatland.js"></script>
+<!-- build fails, because it doesn't understand ?. -->
+<!--SCRIPT type="module" src="./build6.js"></script-->
 
 </HTML>

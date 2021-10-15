@@ -7,11 +7,13 @@
   },
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node test.js"
+    "start": "node --inspect --experimental-loader=sack.vfs/import.mjs server.mjs",
+    "test": "node  --experimental-loader=sack.vfs/import.mjs test.js"
   },
   "dependencies": {
-    "@d3x0r/popups": "1.0.102",
+    "@d3x0r/popups": "latest",
+    "@d3x0r/srg": "^1.2.0",
+    "@d3x0r/user-database-remote": "latest",
     "jsox": "latest",
     "sack.vfs": "latest"
   },

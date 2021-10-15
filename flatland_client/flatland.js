@@ -6,6 +6,7 @@ const app = document.getElementById( "AppContainer" );
 //import {popups,Popup} from "@d3x0r/popups"
 import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
 import {popups,Popup} from "../node_modules/@d3x0r/popups/popups.mjs"
+import {ObjectStorage} from "../node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -29,19 +30,57 @@ const l = {
 	h : 0,
 	cursor : newImage( "cursor.png" ),
 	cursorSpot : {x:5, y:5},
-
+	storage : null,
+	root : null,
 };
 
+import {connection,Alert,openSocket} from "/login/webSocketClient.js";
+
+const login = openSocket().then( (socket)=>{
+	console.log( "Open socket finally happened?", socket );
+	//login = socket;
+
+	connection.loginForm = popups.makeLoginForm( ()=>{
+			console.log( "login completed..." );
+			if( l.ws )
+				l.ws.send( '{op:worlds}' );
+		}
+		, {wsLoginClient:connection ,
+			useForm: "https://d3x0r.org:8089/ui/login/loginForm.html",
+			parent: app
+		} );
+	return socket;
+} );
+
+if(0)
+connection.loginForm = {
+     connect( a) {
+        // login is ready
+	console.log( "Connect...", a );
+     },
+     disconnect(a) {
+        // login is not ready
+	console.log( "login disconnect", a );
+
+     },
+     login(a) {
+        // login is success
+	console.log( "login complete", a );
+     }
+}
 
 
-function openSocket() {
+function openGameSocket() {
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
+	l.storage = new ObjectStorage( ws );
 	
 	ws.onopen = function() {
 		// Web Socket is connected. You can send data by send() method.
 		//ws.send("message to send"); 
 		l.ws = ws;
-		l.ws.send( '{op:worlds}' );
+
+		console.log( "What if login happens first?" );
+		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
 		parser.write( evt.data );
@@ -49,7 +88,7 @@ function openSocket() {
 	};
 	ws.onclose = function() { 
 		l.ws = null;
-		setTimeout( openSocket, 5000 ); // 5 second delay.
+		setTimeout( openGameSocket, 5000 ); // 5 second delay.
 		if( l.editor ) {
 			l.editor.remove();
 			l.editor = null;
@@ -960,7 +999,7 @@ function processMessage( msg ) {
 	}
 }
 
-openSocket();
+openGameSocket();
 
 
 

@@ -5,12 +5,47 @@ const JSOX = sack.JSOX;
 const storage = sack.ObjectStorage( "store.os" );
 import path from "path";
 import {classes,World} from "./flatland_client/flatland.classes.mjs";
+import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
+
+//const loginCode = sack.HTTPS.get( { port:8089, hostname:"d3x0r.org", path:"serviceLogin.mjs" } );
+//  eval( loginCode ); ... (sort-of)
+import {UserDbRemote} from "@d3x0r/user-database-remote";
+UserDbRemote.import = Import;        
+function Import(a) { return import(a)} 
+let  loginServer = UserDbRemote.open( );
+console.log( "LOGIN?", loginServer );
+initServer(loginServer );
+
+function initServer( loginServer ) {
+
+	loginServer.on( "close", ()=>{
+		loginServer = null;
+		setTimeout( ()=>{
+				loginServer = UserDbRemote.open();
+				initServer( loginServer );
+			}, 5000 );
+	} );
+
+}
+
+const connections = new Map();
+
+function expect( msg ) {
+	console.log( "Told to expect a user: does this result with my own unique ID?", msg );
+
+	// lookup my own user ? Prepare with right object?
+	// connections.set( msg.something, msg ) ;	
+	return true;
+}
+
+
 
 classes.setEncoders( JSOX );
 classes.setDecoders( JSOX );
 
 storage.getRoot().then( r=>{
 	root = r;
+console.log( "got root..." );
 	for( var file of root.files ) {
 		l.worlds.push( new GameWorld( file.name ) );
 	}
@@ -95,21 +130,30 @@ function openServer( opts, cb )
 	var serverOpts = opts || {port: Number(process.argv[2]) || process.env.PORT || 5000} ;
 	var server = sack.WebSocket.Server( serverOpts )
 	var disk = sack.Volume();
-	console.log( "serving on " + serverOpts.port );
+	console.log( "serving on " + serverOpts.port, server );
 	console.log( "with:", disk.dir() );
 
 
-server.onrequest( function( req, res ) {
+server.onrequest = function( req, res ) {
 	var ip = ( req.headers && req.headers['x-forwarded-for'] ) ||
 		 req.connection.remoteAddress ||
 		 req.socket.remoteAddress ||
 		 req.connection.socket.remoteAddress;
 	//ws.clientAddress = ip;
+	if( socketHandleRequest( req, res ) ) {
+		console.log( "Handled by socket-service" );
+		return;
+	}
 	//console.log( "Received request:", req );
 	if( req.url === "/" ) req.url = "/index.html";
 	var filePath = "flatland_client" + unescape(req.url);
 	if( req.url.startsWith( "/node_modules/" ) )
 		filePath="." + unescape(req.url);
+
+	
+	if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
+	if( req.url === '/socket-service-swc.js' ) filePath = 'node_modules/@d3x0r/socket-service/swc.js'
+
 	var extname = path.extname(filePath);
 	var contentType = 'text/html';
 	console.log( ":", extname, filePath )
@@ -144,34 +188,35 @@ server.onrequest( function( req, res ) {
                         break;
 	}
 	if( disk.exists( filePath ) ) {
-		res.writeHead(200, { 'Content-Type': contentType });
+		res.writeHead(200, { 'Content-Type': contentType,  'Access-Control-Allow-Origin':"https://d3x0r.org", Vary: "Origin" });
 		console.log( "Read:", "." + req.url );
 		res.end( disk.read( filePath ) );
 	} else {
 		console.log( "Failed request: ", req );
 		res.writeHead( 404 );
+		
 		res.end( "<HTML><HEAD>404</HEAD><BODY>404</BODY></HTML>");
 	}
-} );
+};
 
-server.onaccept( function ( ws ) {
+server.onaccept = function ( ws ) {
+	//console.log( "this?", this,ws );
 	if( cb ) return cb(ws)
 //	console.log( "Connection received with : ", ws.protocols, " path:", resource );
         if( process.argv[2] == "1" )
 		this.reject();
         else
 		this.accept();
-} );
+};
 
-server.onconnect( function (ws) {
+server.onconnect = function (ws) {
    ws.World = null;
 	ws.world = null; // extend socket.
 	ws.lastMessage = Date.now();
 	//console.log( "Connect:", ws );
-	ws.onmessage( function( msg_ ) {
+	ws.onmessage = function( msg_ ) {
 		ws.lastMessage = Date.now();
 		const msg = JSOX.parse( msg_ );
-		
       	//console.log( "Received data:", msg );
         //ws.send( msg );
 		if( msg.op === "worlds" ) {
@@ -283,8 +328,8 @@ server.onconnect( function (ws) {
 			//ws.close();
 			console.log( "need to handle message:", msg );
 		}
-        } );
-	ws.onclose( function() {
+        } ;
+	ws.onclose = function() {
 	  //console.log( "Remote closed" );
 		const loadingIdx = l.loading.findIndex( w=>w===ws );
 		if( loadingIdx >= 0 )
@@ -294,7 +339,7 @@ server.onconnect( function (ws) {
 		console.log( "DELETE PLAYER:", ws.world );
 		if( ws.world && !(ws.world instanceof Promise) )
 			ws.world.delPlayer(ws);
-	} );
+	};
 	let pingTimer =null;
 	pingTick();
 	function pingTick(){
@@ -307,7 +352,7 @@ server.onconnect( function (ws) {
 		
 		pingTimer = setTimeout( pingTick, 30000 - (now - ws.lastMessage) );
 	}
-} );
+} ;
 
 }
 
