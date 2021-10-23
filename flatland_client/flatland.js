@@ -32,46 +32,51 @@ const l = {
 	cursorSpot : {x:5, y:5},
 	storage : null,
 	root : null,
+	login : null,
 };
 
-import {connection,Alert,openSocket} from "/login/webSocketClient.js";
-
-const login = openSocket().then( (socket)=>{
-	console.log( "Open socket finally happened?", socket );
-	//login = socket;
-
-	connection.loginForm = popups.makeLoginForm( ()=>{
-			console.log( "login completed..." );
-			if( l.ws )
-				l.ws.send( '{op:worlds}' );
-		}
-		, {wsLoginClient:connection ,
-			useForm: "https://d3x0r.org:8089/ui/login/loginForm.html",
-			parent: app
-		} );
-	return socket;
+//import {connection,Alert,openSocket} from "/login/webSocketClient.js";
+const wsc = await import( "https://d3x0r.org:8089/ui/login/webSocketClient.js" ).then( (module)=>{
+	console.log("Thing:", module );
+	beginLogin( module.openSocket, module.connection );
+	return module;
 } );
 
-if(0)
-connection.loginForm = {
-     connect( a) {
-        // login is ready
-	console.log( "Connect...", a );
-     },
-     disconnect(a) {
-        // login is not ready
-	console.log( "login disconnect", a );
+//import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 
-     },
-     login(a) {
-        // login is success
-	console.log( "login complete", a );
-     }
+
+function beginLogin( openSocket, connection ) {
+
+	let login = openSocket().then( (socket)=>{
+		console.log( "Open socket finally happened?", socket );
+			//login = socket;
+        
+		connection.loginForm = popups.makeLoginForm( (token)=>{
+				console.log( "login completed...", token );
+        			token.request( "d3x0r.org", "flatland" ).then( (token)=>{
+					;
+				console.log( "flatland request:" );
+				        l.login = token; // this is 'connection' also.
+					openGameSocket( );
+				} );
+			}
+			, {wsLoginClient:connection ,
+				useForm: "https://d3x0r.org:8089/ui/login/loginForm.html",
+				parent: app
+			} );
+		return socket;
+	} );
+
 }
 
-
-function openGameSocket() {
+function openGameSocket( uid ) {
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
+	const oldSend = ws.send.bind( ws);
+	ws.send = function(Msg) {
+		if( "object" === typeof Msg ) Msg= JSOX.stringify( Msg );
+		oldSend( Msg );
+	}
+
 	l.storage = new ObjectStorage( ws );
 	
 	ws.onopen = function() {
@@ -79,7 +84,9 @@ function openGameSocket() {
 		//ws.send("message to send"); 
 		l.ws = ws;
 
-		console.log( "What if login happens first?" );
+		console.log( "What if login should have given a token..." );
+		
+		l.ws.send( `{op:worlds,user:${uid}}` );
 		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
@@ -127,6 +134,7 @@ function selectWorld( worldList ){
 
 		const delWorld = popups.makeButton( row, "X", ((world)=>()=>{
 			row.remove();
+				openGameSocket( );
 			//selector.deleteItem( row );
 			l.ws.send( JSOX.stringify( {op:'deleteWorld', world:world, user:localStorage.getItem( "userId" ) || "AllowMe" } ) );
 			//selector.hide();
@@ -999,7 +1007,6 @@ function processMessage( msg ) {
 	}
 }
 
-openGameSocket();
 
 
 

@@ -10,7 +10,9 @@ import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 //const loginCode = sack.HTTPS.get( { port:8089, hostname:"d3x0r.org", path:"serviceLogin.mjs" } );
 //  eval( loginCode ); ... (sort-of)
 import {UserDbRemote} from "@d3x0r/user-database-remote";
-UserDbRemote.import = Import;        
+UserDbRemote.import = Import;      
+UserDbRemote.on( "expect", expect );
+  
 function Import(a) { return import(a)} 
 let  loginServer = UserDbRemote.open( );
 console.log( "LOGIN?", loginServer );
@@ -151,8 +153,8 @@ server.onrequest = function( req, res ) {
 		filePath="." + unescape(req.url);
 
 	
-	if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
-	if( req.url === '/socket-service-swc.js' ) filePath = 'node_modules/@d3x0r/socket-service/swc.js'
+	//if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
+	//if( req.url === '/socket-service-swc.js' ) filePath = 'node_modules/@d3x0r/socket-service/swc.js'
 
 	var extname = path.extname(filePath);
 	var contentType = 'text/html';
@@ -216,7 +218,9 @@ server.onconnect = function (ws) {
 	//console.log( "Connect:", ws );
 	ws.onmessage = function( msg_ ) {
 		ws.lastMessage = Date.now();
-		const msg = JSOX.parse( msg_ );
+try {
+		
+		const msg = ("string"===typeof msg_)?JSOX.parse( msg_ ):msg_;
       	//console.log( "Received data:", msg );
         //ws.send( msg );
 		if( msg.op === "worlds" ) {
@@ -328,7 +332,11 @@ server.onconnect = function (ws) {
 			//ws.close();
 			console.log( "need to handle message:", msg );
 		}
+}catch(err){
+	console.log( "Error Parsing:", err, msg_ );
+}
         } ;
+
 	ws.onclose = function() {
 	  //console.log( "Remote closed" );
 		const loadingIdx = l.loading.findIndex( w=>w===ws );
