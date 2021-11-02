@@ -35,9 +35,12 @@ const connections = new Map();
 function expect( msg ) {
 	console.log( "Told to expect a user: does this result with my own unique ID?", msg );
 
+	const id = sack.Id();
+	const user = msg;
+	connections.set( id, user );
 	// lookup my own user ? Prepare with right object?
 	// connections.set( msg.something, msg ) ;	
-	return true;
+	return id;
 }
 
 

@@ -57,7 +57,7 @@ function beginLogin( openSocket, connection ) {
 					;
 				console.log( "flatland request:" );
 				        l.login = token; // this is 'connection' also.
-					openGameSocket( );
+					openGameSocket( token.svc.key );
 				} );
 			}
 			, {wsLoginClient:connection ,
