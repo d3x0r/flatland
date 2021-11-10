@@ -20,6 +20,7 @@ const localStorage = window.localStorage || { getItem(a){ return undefined;} };
 const l = {
 	world : null,
 	canvas : null,
+	editor : null,
 	scale : 0.05, 
 	ws : null, // active connection to server.
 	worldCtx : null, // world editor default context
@@ -33,31 +34,33 @@ const l = {
 	storage : null,
 	root : null,
 	login : null,
+	selector : null,
 };
 
 //import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 const wsc = await import( "https://d3x0r.org:8089/ui/login/webSocketClient.js" ).then( (module)=>{
-	console.log("Thing:", module );
+	//console.log("Thing:", module );
 	beginLogin( module.openSocket, module.connection );
 	return module;
 } );
 
 //import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 
-
 function beginLogin( openSocket, connection ) {
-
-	let login = openSocket().then( (socket)=>{
+	openSocket = openSocket || wsc.openSocket;
+	connection = connection || wsc.connection;
+	openSocket().then( (socket)=>{
 		console.log( "Open socket finally happened?", socket );
 			//login = socket;
         
-		connection.loginForm = popups.makeLoginForm( (token)=>{
-				console.log( "login completed...", token );
-        			token.request( "d3x0r.org", "flatland" ).then( (token)=>{
+		connection.loginForm = popups.makeLoginForm( (conn)=>{
+				//console.log( "login socket initialized...", conn );
+        			conn.request( "d3x0r.org", "flatland" ).then( (token)=>{
 					;
-				console.log( "flatland request:" );
+					console.log( "flatland request:", token );
 				        l.login = token; // this is 'connection' also.
 					openGameSocket( token.svc.key );
+					connection.loginForm.hide();
 				} );
 			}
 			, {wsLoginClient:connection ,
@@ -86,7 +89,7 @@ function openGameSocket( uid ) {
 
 		console.log( "What if login should have given a token..." );
 		
-		l.ws.send( `{op:worlds,user:${uid}}` );
+		l.ws.send( `{op:worlds,user:'${uid}'}` );
 		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
@@ -95,11 +98,15 @@ function openGameSocket( uid ) {
 	};
 	ws.onclose = function() { 
 		l.ws = null;
-		setTimeout( openGameSocket, 5000 ); // 5 second delay.
+		//setTimeout( openGameSocket, 5000 ); // 5 second delay.
+		setTimeout( beginLogin, 5000 ); // 5 second delay.
+		
+		if( l.selector ) l.selector.remove();
 		if( l.editor ) {
 			l.editor.remove();
 			l.editor = null;
 			l.canvas = null;
+			beginLogin();
 		}
 		// websocket is closed. 
 	};
@@ -661,10 +668,10 @@ function setupWorld( world ) {
 	const editor = new popups.create( "World Editor", app );
 	const canvas = l.canvas = document.createElement( "canvas" );
 	const popup = setupMenu();
-	canvas.requestPointerLock = canvas.requestPointerLock ||
-                            canvas.mozRequestPointerLock;
+	//canvas.requestPointerLock = canvas.requestPointerLock ||
+        //                    canvas.mozRequestPointerLock;
 	editor.divContent.style.position = "relative";
-	canvas.requestPointerLock();
+
 
 	l.world = world;
 
@@ -926,6 +933,10 @@ function setupWorld( world ) {
 	l.worldCtx= canvas.getContext( "2d" );
 
 	editor.appendChild( canvas );
+
+	// have to wait until here to get lock.
+	//canvas.requestPointerLock();
+
 	const toggles = document.createElement( "div" );
 	toggles.style.position = "absolute";
 	toggles.style.left = 0;
@@ -960,11 +971,12 @@ function dispatchChanges( ) {
 	}
 }
 
-let selector = null;
 function processMessage( msg ) {
-	if( msg.op === "worlds" ) {
-		if( selector ) selector.remove();
-		selector = selectWorld( msg.worlds );
+	if( l.storage.handleMessage( l.ws, msg ) ){
+		console.log( "handled by storage..." );
+	} else if( msg.op === "worlds" ) {
+		if( l.selector ) l.selector.remove();
+		l.selector = selectWorld( msg.worlds );
 
 	} else if( msg.op === "error" ) {
 		popups.simpleNotice( "Error", msg.error, ()=>{

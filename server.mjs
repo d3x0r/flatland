@@ -2,8 +2,9 @@
 import {sack} from "sack.vfs" ;
 
 const JSOX = sack.JSOX;
-const storage = sack.ObjectStorage( "store.os" );
+const storage = sack.ObjectStorage( "fs/store.os" );
 import path from "path";
+const StoredObject = storage.StoredObject;
 import {classes,World} from "./flatland_client/flatland.classes.mjs";
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
@@ -14,23 +15,33 @@ UserDbRemote.import = Import;
 UserDbRemote.on( "expect", expect );
   
 function Import(a) { return import(a)} 
-let  loginServer = UserDbRemote.open( );
-console.log( "LOGIN?", loginServer );
-initServer(loginServer );
+let  loginServer;
+openLoginServer(); // must only be called once...
 
-function initServer( loginServer ) {
+function openLoginServer() {
+	loginServer = null;
+	setTimeout( ()=>initServer( loginServer = UserDbRemote.open() ), 5000 );
 
-	loginServer.on( "close", ()=>{
-		loginServer = null;
-		setTimeout( ()=>{
-				loginServer = UserDbRemote.open();
-				initServer( loginServer );
-			}, 5000 );
-	} );
-
+	function initServer( loginServer ) {
+		if( loginServer )
+			loginServer.on( "close", openLoginServer );
+		else
+			console.log( "Socket connection failed..." );
+	}
 }
 
+
 const connections = new Map();
+
+class User extends StoredObject {
+	name=null;
+	
+	constructor() {
+	}
+	set( uid, name ) {
+		this.store();
+	}
+}
 
 function expect( msg ) {
 	console.log( "Told to expect a user: does this result with my own unique ID?", msg );
@@ -40,6 +51,7 @@ function expect( msg ) {
 	connections.set( id, user );
 	// lookup my own user ? Prepare with right object?
 	// connections.set( msg.something, msg ) ;	
+	console.log( "expected user:", id );
 	return id;
 }
 
@@ -50,7 +62,7 @@ classes.setDecoders( JSOX );
 
 storage.getRoot().then( r=>{
 	root = r;
-console.log( "got root..." );
+	console.log( "got root..." );
 	for( var file of root.files ) {
 		l.worlds.push( new GameWorld( file.name ) );
 	}
@@ -193,7 +205,8 @@ server.onrequest = function( req, res ) {
                         break;
 	}
 	if( disk.exists( filePath ) ) {
-		res.writeHead(200, { 'Content-Type': contentType,  'Access-Control-Allow-Origin':"https://d3x0r.org", Vary: "Origin" });
+		res.writeHead(200, { 'Content-Type': contentType
+			/*'Access-Control-Allow-Origin':"https://d3x0r.org", Vary: "Origin"*/ });
 		console.log( "Read:", "." + req.url );
 		res.end( disk.read( filePath ) );
 	} else {
@@ -224,11 +237,23 @@ server.onconnect = function (ws) {
 try {
 		
 		const msg = ("string"===typeof msg_)?JSOX.parse( msg_ ):msg_;
-      	//console.log( "Received data:", msg );
+      	console.log( "Received data:", msg );
         //ws.send( msg );
-		if( msg.op === "worlds" ) {
-			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
-			l.loading.push(ws);
+		if( storage.handleMessage( ws, msg ) ) {
+		    // else it's should be processed here.
+			console.log( "Handled by storage?" );
+		} else if( msg.op === "worlds" ) {
+			console.log( "Lookup user:", msg.user );
+			const user = connections.get( msg.user );
+			if( user ) {
+				connections.delete( msg.user );
+
+				ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds, uworlds: user.worlds } ) );
+				l.loading.push(ws);
+			} else {
+				ws.send( JSOX.stringify( {op:"no" } )  );
+				ws.close(1000, "no");
+			}
 		} else if( msg.op === "deleteWorld" ) {
 			const oldIdx = l.worlds.findIndex( w=>w.name === msg.world.name );
 			console.log( "if user key matches creator...", msg.user, oldIdx, msg );
