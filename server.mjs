@@ -99,7 +99,7 @@ function openServer( opts, cb )
 	console.log( "with:", disk.dir() );
 
 
-server.onrequest( function( req, res ) {
+server.onrequest = function( req, res ) {
 	var ip = ( req.headers && req.headers['x-forwarded-for'] ) ||
 		 req.connection.remoteAddress ||
 		 req.socket.remoteAddress ||
@@ -152,23 +152,24 @@ server.onrequest( function( req, res ) {
 		res.writeHead( 404 );
 		res.end( "<HTML><HEAD>404</HEAD><BODY>404</BODY></HTML>");
 	}
-} );
+};
 
-server.onaccept( function ( ws ) {
+server.onaccept = function ( ws ) {
 	if( cb ) return cb(ws)
 //	console.log( "Connection received with : ", ws.protocols, " path:", resource );
         if( process.argv[2] == "1" )
 		this.reject();
         else
 		this.accept();
-} );
+};
 
-server.onconnect( function (ws) {
+server.onconnect = function (ws) {
    ws.World = null;
 	ws.world = null; // extend socket.
+	ws.noDelay = true;
 	ws.lastMessage = Date.now();
 	//console.log( "Connect:", ws );
-	ws.onmessage( function( msg_ ) {
+	ws.onmessage = function( msg_ ) {
 		ws.lastMessage = Date.now();
 		const msg = JSOX.parse( msg_ );
 		
@@ -283,8 +284,8 @@ server.onconnect( function (ws) {
 			//ws.close();
 			console.log( "need to handle message:", msg );
 		}
-        } );
-	ws.onclose( function() {
+        };
+	ws.onclose = function(code,reason) {
 	  //console.log( "Remote closed" );
 		const loadingIdx = l.loading.findIndex( w=>w===ws );
 		if( loadingIdx >= 0 )
@@ -294,7 +295,7 @@ server.onconnect( function (ws) {
 		console.log( "DELETE PLAYER:", ws.world );
 		if( ws.world && !(ws.world instanceof Promise) )
 			ws.world.delPlayer(ws);
-	} );
+	};
 	let pingTimer =null;
 	pingTick();
 	function pingTick(){
@@ -307,7 +308,7 @@ server.onconnect( function (ws) {
 		
 		pingTimer = setTimeout( pingTick, 30000 - (now - ws.lastMessage) );
 	}
-} );
+} ;
 
 }
 

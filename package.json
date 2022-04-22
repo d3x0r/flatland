@@ -8,10 +8,11 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test.js"
+    "test": "node test.js",
+    "link": "npm link @d3x0r/popups jsox sack.vfs"
   },
   "dependencies": {
-    "@d3x0r/popups": "1.0.102",
+    "@d3x0r/popups": "latest",
     "jsox": "latest",
     "sack.vfs": "latest"
   },
@@ -20,10 +21,10 @@
     "url": "https://github.com/d3x0r/flatland"
   },
   "keywords": [
-    "flatland"
+    "flatland", "websocket-game", "websockets", "multiplayer", "game"
   ],
   "license": "MIT",
-  "devDependencies": {
+  "pack_devDependencies": {
     "@babel/cli": "^7.0.0",
     "@babel/core": "^7.0.0",
     "@babel/node": "^7.12.10",
