@@ -8,14 +8,17 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node --inspect --experimental-loader=sack.vfs/import.mjs server.mjs",
-    "test": "node  --experimental-loader=sack.vfs/import.mjs test.js"
+    "test": "node  --experimental-loader=sack.vfs/import.mjs test.js",
+    "link": "npm link @d3x0r/popups @d3x0r/srg @d3x0r/object-storage @d3x0r/user-database-remote jsox sack.vfs @d3x0r/socket-service"
   },
   "dependencies": {
     "@d3x0r/popups": "latest",
     "@d3x0r/srg": "^1.2.0",
+    "@d3x0r/srg2": "latest",
     "@d3x0r/user-database-remote": "latest",
     "jsox": "latest",
-    "sack.vfs": "latest"
+    "sack.vfs": "latest",
+    "@d3x0r/socket-service": "latest"
   },
   "repository": {
     "type": "git",
@@ -25,7 +28,7 @@
     "flatland"
   ],
   "license": "MIT",
-  "devDependencies": {
+  "xdevDependencies": {
     "@babel/cli": "^7.0.0",
     "@babel/core": "^7.0.0",
     "@babel/node": "^7.12.10",

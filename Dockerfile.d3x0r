@@ -1,0 +1,9 @@
+
+FROM d3x0r/node-alpine-run 
+
+VOLUME fs
+
+copy . .
+CMD ["node", "--inspect=0.0.0.0:9229", "--experimental-loader=sack.vfs/import.mjs", "server.mjs", "5000"]
+EXPOSE 5000
+EXPOSE 9229
