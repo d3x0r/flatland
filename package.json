@@ -9,12 +9,16 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node test.js",
+    "start2": "node --inspect --experimental-loader=sack.vfs/import.mjs server.mjs",
+    "test2": "node  --experimental-loader=sack.vfs/import.mjs test.js",
     "link": "npm link @d3x0r/popups jsox sack.vfs"
   },
   "dependencies": {
     "@d3x0r/popups": "latest",
+    "@d3x0r/srg": "^1.2.0",
+    "@d3x0r/user-database-remote": "latest",
     "jsox": "latest",
-    "sack.vfs": "1.1.801"
+    "sack.vfs": "latest"
   },
   "repository": {
     "type": "git",

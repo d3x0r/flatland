@@ -1479,7 +1479,7 @@ JSOX$1.begin = function (cb, reviver) {
 
         if (parse_context === CONTEXT_UNKNOWN) {
           elements = tmpobj;
-        } else if (parse_context == CONTEXT_IN_ARRAY) ;else if (parse_context == CONTEXT_OBJECT_FIELD_VALUE || parse_context == CONTEXT_CLASS_VALUE) {
+        } else if (parse_context == CONTEXT_OBJECT_FIELD_VALUE || parse_context == CONTEXT_CLASS_VALUE) {
           if (!val.name && current_class) {
             val.name = current_class.fields[current_class_field++]; //_DEBUG_PARSING_DETAILS && console.log( "B Stepping current class field:", val, current_class_field, val.name );
           } //_DEBUG_PARSING_DETAILS && console.log( "Setting element:", val.name, tmpobj );
@@ -4337,7 +4337,7 @@ function clearClass(el, cn) {
 }
 
 function setClass(el, cn) {
-  if (el.className.includes(cn)) ;else {
+  if (!el.className.includes(cn)) {
     el.className += " " + cn;
   }
 }
@@ -6609,6 +6609,8 @@ class World {
 
 
 }
+/** @nocollapse */
+
 
 World.fromJSOX = function (field, val) {
   if (!field) {
@@ -6621,6 +6623,8 @@ World.fromJSOX = function (field, val) {
     return undefined;
   }
 };
+/** @nocollapse */
+
 
 World.toJSOX = function (stringifier) {
   return this.toJSOX(stringifier);

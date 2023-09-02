@@ -6,6 +6,7 @@ const app = document.getElementById( "AppContainer" );
 //import {popups,Popup} from "@d3x0r/popups"
 import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
 import {popups,Popup} from "../node_modules/@d3x0r/popups/popups.mjs"
+import {ObjectStorage} from "../node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -29,19 +30,64 @@ const l = {
 	h : 0,
 	cursor : newImage( "cursor.png" ),
 	cursorSpot : {x:5, y:5},
-
+	storage : null,
+	root : null,
+	login : null,
 };
 
+//import {connection,Alert,openSocket} from "/login/webSocketClient.js";
+const wsc = await import( "https://d3x0r.org:8089/ui/login/webSocketClient.js" ).then( (module)=>{
+	console.log("Thing:", module );
+	beginLogin( module.openSocket, module.connection );
+	return module;
+} );
+
+//import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 
 
-function openSocket() {
+function beginLogin( openSocket, connection ) {
+
+	let login = openSocket().then( (socket)=>{
+		console.log( "Open socket finally happened?", socket );
+			//login = socket;
+        
+		connection.loginForm = popups.makeLoginForm( (token)=>{
+				console.log( "login completed...", token );
+        			token.request( "d3x0r.org", "flatland" ).then( (token)=>{
+					;
+				console.log( "flatland request:" );
+				        l.login = token; // this is 'connection' also.
+					openGameSocket( token.svc.key );
+				} );
+			}
+			, {wsLoginClient:connection ,
+				useForm: "https://d3x0r.org:8089/ui/login/loginForm.html",
+				parent: app
+			} );
+		return socket;
+	} );
+
+}
+
+function openGameSocket( uid ) {
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
+	const oldSend = ws.send.bind( ws);
+	ws.send = function(Msg) {
+		if( "object" === typeof Msg ) Msg= JSOX.stringify( Msg );
+		oldSend( Msg );
+	}
+
+	l.storage = new ObjectStorage( ws );
 	
 	ws.onopen = function() {
 		// Web Socket is connected. You can send data by send() method.
 		//ws.send("message to send"); 
 		l.ws = ws;
-		l.ws.send( '{op:worlds}' );
+
+		console.log( "What if login should have given a token..." );
+		
+		l.ws.send( `{op:worlds,user:${uid}}` );
+		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
 		parser.write( evt.data );
@@ -49,7 +95,7 @@ function openSocket() {
 	};
 	ws.onclose = function() { 
 		l.ws = null;
-		setTimeout( openSocket, 5000 ); // 5 second delay.
+		setTimeout( openGameSocket, 5000 ); // 5 second delay.
 		if( l.editor ) {
 			l.editor.remove();
 			l.editor = null;
@@ -88,6 +134,7 @@ function selectWorld( worldList ){
 
 		const delWorld = popups.makeButton( row, "X", ((world)=>()=>{
 			row.remove();
+				openGameSocket( );
 			//selector.deleteItem( row );
 			l.ws.send( JSOX.stringify( {op:'deleteWorld', world:world, user:localStorage.getItem( "userId" ) || "AllowMe" } ) );
 			//selector.hide();
@@ -960,7 +1007,6 @@ function processMessage( msg ) {
 	}
 }
 
-openSocket();
 
 
 
