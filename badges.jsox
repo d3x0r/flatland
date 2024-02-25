@@ -1,0 +1,6 @@
+
+{
+	activate : { name: "Activation",
+        		description: "User has accessed this service?"
+        	},
+}
