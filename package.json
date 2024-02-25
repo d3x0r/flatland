@@ -7,8 +7,8 @@
   },
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node test.js",
+    "start": "node --inspect --experimental-loader=sack.vfs/import.mjs server.mjs",
+    "test": "node --inspect --experimental-loader=sack.vfs/import.mjs test.js",
     "start2": "node --inspect --experimental-loader=sack.vfs/import.mjs server.mjs",
     "test2": "node  --experimental-loader=sack.vfs/import.mjs test.js",
     "link": "npm link @d3x0r/popups jsox sack.vfs"

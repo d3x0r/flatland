@@ -336,7 +336,11 @@ try {
 			//ws.close();
 			console.log( "need to handle message:", msg );
 		}
-        };
+}catch(err){
+	console.log( "Error Parsing:", err, msg_ );
+}
+        } ;
+
 	ws.onclose = function(code,reason) {
 	  //console.log( "Remote closed" );
 		const loadingIdx = l.loading.findIndex( w=>w===ws );
