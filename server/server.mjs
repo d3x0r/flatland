@@ -1,10 +1,21 @@
 
+
+const colons = import.meta.url.split(':');
+const where = colons.length===2?colons[1].substr(1):colons[2];
+const nearIdx = where.lastIndexOf( "/" );
+const nearPath = where.substr(0, nearIdx );
+console.log( "I think this works for a windows path:...", import.meta.url, nearPath, where );
+
+
 import {sack} from "sack.vfs" ;
 
 const JSOX = sack.JSOX;
-const storage = sack.ObjectStorage( "store.os" );
+const storage = new sack.ObjectStorage( "store.os" );
+import {Protocol} from "sack.vfs/protocol";
 import path from "path";
-import {classes,World} from "./flatland_client/flatland.classes.mjs";
+import {classes,World} from "../flatland_client/flatland.classes.mjs";
+import {uExpress} from "sack.vfs/uexpress" ;
+
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
 //const loginCode = sack.HTTPS.get( { port:8089, hostname:"d3x0r.org", path:"serviceLogin.mjs" } );
@@ -12,14 +23,21 @@ import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 import {UserDbRemote} from "@d3x0r/user-database-remote";
 UserDbRemote.import = Import;      
 UserDbRemote.on( "expect", expect );
+
+export const config = {
+	loginRemote : null,
+	loginReportPort : 0,
+}
   
 function Import(a) { return import(a)} 
-let  loginServer = UserDbRemote.open( );
+let  loginServer = await UserDbRemote.open( );
 console.log( "LOGIN?", loginServer );
 initServer(loginServer );
 
 function initServer( loginServer ) {
-
+	console.log( loginServer.ws.connection );
+	config.loginRemote = loginServer.ws.connection.remoteAddress;
+	config.loginRemotePort = loginServer.ws.connection.remotePort;
 	loginServer.on( "close", ()=>{
 		loginServer = null;
 		setTimeout( ()=>{
@@ -130,91 +148,45 @@ class GameWorld {
 //JSOX.toJSOX( "", GameWorld )
 
 
-function openServer( opts, cb )
+class FlatlandServer extends Protocol {
+
+
+constructor( opts, cb )
 {
-	var serverOpts = opts || {port: Number(process.argv[2]) || process.env.PORT || 5000} ;
-	var server = sack.WebSocket.Server( serverOpts )
+	const serverOpts = opts || {port: Number(process.argv[2]) || process.env.PORT || 5000
+			, resourcePath: nearPath+"/../flatland_client",
+			npmPath: nearPath+"/.." } ;
+	super( serverOpts );
+
+
+	
+	const app = uExpress();
+	this.server.addHandler( app.handle );
+	this.server.addHandler( socketHandleRequest );
+
+	app.get( /\/internal\//, (req,res)=>{
+		const split = req.url.split( "/" );
+		console.log( "Resolve internal request:", split );
+		switch( split[2] ) {
+		case "loginServer":
+			res.writeHead( 200, {'Content-Type': "text/javascript" } );
+			res.end( "export default "+JSON.stringify( {loginRemote:config.loginRemote, loginRemotePort:config.loginRemotePort} ) );
+			return true;
+		}
+	} );
+
+	//var serverOpts = opts || {port: Number(process.argv[2]) || process.env.PORT || 5000} ;
+
+	//var server = sack.WebSocket.Server( serverOpts )
 	var disk = sack.Volume();
-	console.log( "serving on " + serverOpts.port, server );
+	console.log( "serving on " + serverOpts.port );
 	console.log( "with:", disk.dir() );
 
 
-server.onrequest = function( req, res ) {
-	var ip = ( req.headers && req.headers['x-forwarded-for'] ) ||
-		 req.connection.remoteAddress ||
-		 req.socket.remoteAddress ||
-		 req.connection.socket.remoteAddress;
-	//ws.clientAddress = ip;
-	if( socketHandleRequest( req, res ) ) {
-		console.log( "Handled by socket-service" );
-		return;
-	}
-	//console.log( "Received request:", req );
-	if( req.url === "/" ) req.url = "/index.html";
-	var filePath = "flatland_client" + unescape(req.url);
-	if( req.url.startsWith( "/node_modules/" ) )
-		filePath="." + unescape(req.url);
+	this.on("connect", connect )
 
-	
-	//if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
-	//if( req.url === '/socket-service-swc.js' ) filePath = 'node_modules/@d3x0r/socket-service/swc.js'
-
-	var extname = path.extname(filePath);
-	var contentType = 'text/html';
-	console.log( ":", extname, filePath )
-	switch (extname) {
-		  case '.js':
-		  case '.mjs':
-			  contentType = 'text/javascript';
-			  break;
-		  case '.css':
-			  contentType = 'text/css';
-			  break;
-		  case '.json':
-			  contentType = 'application/json';
-			  break;
-		  case '.png':
-			  contentType = 'image/png';
-			  break;
-		  case '.jpg':
-			  contentType = 'image/jpg';
-			  break;
-		  case '.wav':
-			  contentType = 'audio/wav';
-			  break;
-                case '.crt':
-                        contentType = 'application/x-x509-ca-cert';
-                        break;
-                case '.pem':
-                        contentType = 'application/x-pem-file';
-                        break;
-                  case '.wasm': case '.asm':
-                  	contentType = 'application/wasm';
-                        break;
-	}
-	if( disk.exists( filePath ) ) {
-		res.writeHead(200, { 'Content-Type': contentType,  'Access-Control-Allow-Origin':"https://d3x0r.org", Vary: "Origin" });
-		console.log( "Read:", "." + req.url );
-		res.end( disk.read( filePath ) );
-	} else {
-		console.log( "Failed request: ", req );
-		res.writeHead( 404 );
-		
-		res.end( "<HTML><HEAD>404</HEAD><BODY>404</BODY></HTML>");
-	}
-};
-
-server.onaccept = function ( ws ) {
-	//console.log( "this?", this,ws );
-	if( cb ) return cb(ws)
-//	console.log( "Connection received with : ", ws.protocols, " path:", resource );
-        if( process.argv[2] == "1" )
-		this.reject();
-        else
-		this.accept();
-};
-
-server.onconnect = function (ws) {
+	 function connect(ws) {
+console.log( "on connect:", ws );
    ws.World = null;
 	ws.world = null; // extend socket.
 	ws.noDelay = true;
@@ -364,10 +336,10 @@ try {
 		
 		pingTimer = setTimeout( pingTick, 30000 - (now - ws.lastMessage) );
 	}
-} ;
+} 
 
 }
-
+ }
 
 function setupWorldEvents(newWorld, world) {
 	const sendBuffer = [];
@@ -415,4 +387,4 @@ function setupWorldEvents(newWorld, world) {
 	} );
 }
 
-openServer();
+const server = new FlatlandServer();

@@ -4,9 +4,9 @@ const app = document.getElementById( "AppContainer" );
 
 //import {JSOX} from "jsox" 
 //import {popups,Popup} from "@d3x0r/popups"
-import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
-import {popups,Popup} from "../node_modules/@d3x0r/popups/popups.mjs"
-import {ObjectStorage} from "../node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
+import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
+import {popups,Popup} from "/node_modules/@d3x0r/popups/popups.mjs"
+import {ObjectStorage} from "/node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -36,7 +36,8 @@ const l = {
 };
 
 //import {connection,Alert,openSocket} from "/login/webSocketClient.js";
-const wsc = await import( "https://d3x0r.org:8089/ui/login/webSocketClient.js" ).then( (module)=>{
+import loginServer from "/internal/loginServer";
+const wsc = await import( ( ("http://"+loginServer.loginRemote+":"+loginServer.loginRemotePort) || "https://d3x0r.org:8089" ) + "/login/webSocketClient.js" ).then( (module)=>{
 	console.log("Thing:", module );
 	beginLogin( module.openSocket, module.connection );
 	return module;
