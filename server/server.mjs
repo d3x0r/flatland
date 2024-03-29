@@ -35,13 +35,13 @@ console.log( "LOGIN?", loginServer );
 initServer(loginServer );
 
 function initServer( loginServer ) {
-	console.log( loginServer.ws.connection );
+	console.log( "loginserver:", loginServer, loginServer&&loginServer.ws&&loginServer.ws.connection );
 	config.loginRemote = loginServer.ws.connection.remoteAddress;
 	config.loginRemotePort = loginServer.ws.connection.remotePort;
 	loginServer.on( "close", ()=>{
 		loginServer = null;
-		setTimeout( ()=>{
-				loginServer = UserDbRemote.open();
+		setTimeout( async ()=>{
+				loginServer = await UserDbRemote.open();
 				initServer( loginServer );
 			}, 5000 );
 	} );

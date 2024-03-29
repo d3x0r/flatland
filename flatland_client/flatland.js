@@ -7,6 +7,7 @@ const app = document.getElementById( "AppContainer" );
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
 import {popups,Popup} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {ObjectStorage} from "/node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
+import {workerInterface}  from "/node_modules/@d3x0r/socket-service/swc.js";
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -51,7 +52,7 @@ function beginLogin( openSocket, connection ) {
 	let login = openSocket().then( (socket)=>{
 		console.log( "Open socket finally happened?", socket );
 			//login = socket;
-        
+      socket.setUiLoader();
 		connection.loginForm = popups.makeLoginForm( (token)=>{
 				console.log( "login completed...", token );
         			token.request( "d3x0r.org", "flatland" ).then( (token)=>{
@@ -62,9 +63,11 @@ function beginLogin( openSocket, connection ) {
 				} );
 			}
 			, {wsLoginClient:connection ,
-				useForm: "https://d3x0r.org:8089/ui/login/loginForm.html",
+				useForm: "https://d3x0r.org:8089/login/loginForm.html",
 				parent: app
 			} );
+
+		connection.loginForm.show();
 		return socket;
 	} );
 
