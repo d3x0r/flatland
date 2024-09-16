@@ -1119,7 +1119,8 @@ function processImage( image, r,g,b ) {
 		outImageData.data[n+0] = 255-myImageData.data[n+0];
 		outImageData.data[n+1] = 255-myImageData.data[n+1];
 		outImageData.data[n+2] = 255-myImageData.data[n+2];
-		outImageData.data[n+3] = 255-myImageData.data[n+3];
+		// keep same alpha mask, just invert color channels.
+		outImageData.data[n+3] = myImageData.data[n+3];
 	}
 	gameCtx.putImageData(outImageData, 0, 0)
 	var image = new Image();
