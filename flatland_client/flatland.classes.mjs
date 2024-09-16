@@ -1,6 +1,5 @@
 
 let drawLine = null;
-//import {JSOX} from "jsox"
 import {JSOX} from "../node_modules/jsox/lib/jsox.mjs"
 let util = {format(...a) { return (a).join( ' ' ) } };
 //if( "undefined" === typeof window )
@@ -14,6 +13,20 @@ const localParseState = {
 	world : null,
 	
 };
+
+/**
+ * const pool = new Pool( eventHandler, type ); // create a new pool
+ * pool.get( id, {opts} ); // get or create a new object
+ * pool.pack(); // remove empty members
+ * pool.move( member, to ); // move a member to a new location
+ * pool.drop( member ); // remove a member from the pool
+ * pool.array; // get the array of members
+ * pool.on( event, <handler function>/<data> ); // register an event handler
+ *    events:
+ *        create( member ) // member was created
+ *        destroy( member ) // member was destroyed
+ *        update( member ) // member was updated
+ */
 
 class Pool {
 	#events = {};
@@ -88,12 +101,12 @@ class Pool {
 		this.#used[member.id] = null;
 		this.#used[to] = member;
 	}
-        get array() {
-        	return this.#used;
-        }
-        toObject() {
-        	return this.#used;
-        }
+	get array() {
+		return this.#used;
+	}
+	toObject() {
+		return this.#used;
+	}
 	drop( w ) {
 		this.#free.push(w);
 		this.#used[w.id] = null;
@@ -165,21 +178,6 @@ class NameSet extends Pool {
 class NameMsg{
 	name = localParseState.world.getName();
 }
-function buildNamefromJSOX( field,val ) {
-	if( !field ) return this.name;
-	_debug_revive && console.log( "revive name field:", field );
-	switch( field ) {
-	case "flags":
-		return this.name.flags;
-	case "id":
-		_debug_revive && console.log("OVERRIDE ID?", val, this.name.id );
-		this.name.id = val;
-		return undefined;
-	case "name":
-		this.name.name = val;
-		return undefined;
-	} 
-}
 
 
 class Name extends PoolMember {
@@ -195,8 +193,25 @@ class Name extends PoolMember {
 
 	set(opts) {
 		this.name = opts.name;
+		this.on( "update" );
 	}
 
+	static fromJSOX( field,val ) {
+		if( !field ) return this.name;
+		_debug_revive && console.log( "revive name field:", field );
+		switch( field ) {
+		case "flags":
+			// as an object, need to use this instance...
+			return this.name.flags;
+		case "id":
+			_debug_revive && console.log("OVERRIDE ID?", val, this.name.id );
+			this.name.id = val;
+			return undefined;
+		case "name":
+			this.name.name = val;
+			return undefined;
+		} 
+	}
 }
 
 //--------------------------------------------
@@ -205,7 +220,6 @@ class TextureSet extends Pool {
 	constructor(parent) {
 		super( parent, Texture );
 	}
-
 }
 
 class TextureMsg {
@@ -213,20 +227,6 @@ class TextureMsg {
 	name = null;
 	flags = null;
 }
-function buildTexturefromJSOX( field,val ) {
-	if( !field ) return this.texture.set( this );
-	_debug_revive && console.log( "revive texture ield:", field );
-	switch( field ) {
-	case "flags":
-		return this.texture.flags;
-	case "name":
-		this.texture.name = val;
-		return val;
-	default:
-		return undefined;
-	} 
-}
-
 
 class Texture extends PoolMember{
 	flags = { color : true };
@@ -237,13 +237,29 @@ class Texture extends PoolMember{
 		super(set, Texture)
 	}
 	set(v) {
-		this.color = v.color;
-		this.name = v.name;
+		let changed = false;
+		if( this.color!= v.color ) { this.color = v.color; changed = true }
+		if( this.name!= v.name ) { this.name = v.name; changed = true }
+		this.on( "update" );
 		return this;
 	}
 			
 	SetSolidColor(c) {
 		this.color = c;
+	}
+
+	static fromJSOX( field,val ) {
+		if( !field ) return this.texture.set( this );
+		_debug_revive && console.log( "revive texture ield:", field );
+		switch( field ) {
+		case "flags":
+			return this.texture.flags;
+		case "name":
+			this.texture.name = val;
+			return val;
+		default:
+			return undefined;
+		} 
 	}
 
 };
@@ -256,17 +272,17 @@ function AColor(r,g,b,a)
 
 class Vector {
 	x = 0;
-        y = 0;
-		z = 0;
-		constructor(a,b,c) {
-			if( "number" === typeof a ) {
-				this.x = a;
-				this.y = b;
-			}
-			if( "number" === typeof c ) {
-					this.z = c;
-			}
+	y = 0;
+	z = 0;
+	constructor(a,b,c) {
+		if( "number" === typeof a ) {
+			this.x = a;
+			this.y = b;
 		}
+		if( "number" === typeof c ) {
+				this.z = c;
+		}
+	}
 	set(v) { 
 		if( isNaN( v.x ) ) {
 			console.trace( "found Nan setting vector", this, v );
@@ -307,7 +323,25 @@ class Vector {
 		this.x = a.y*b.z - a.z*b.y;
 		this.y = a.z*b.x - a.x*b.z;
 		this.z = a.x*b.y - a.y*b.x;
+		return this;
 	}
+	get length() {
+		return Math.sqrt( this.x*this.x + this.y*this.y + this.z*this.z );
+	}
+	normalize() {
+		const len = this.length;
+		if( len ) {
+			this.x /= len;
+			this.y /= len;
+			this.z /= len;
+		} else {
+			this.x = this.y = this.z = 0;
+		}
+		return this;
+	}
+	static X = new Vector(1,0,0);
+	static Y = new Vector(0,1,0);
+	static Z = new Vector(0,0,1);
 }
 
 //--------------------------------------------
@@ -419,28 +453,6 @@ class LineMsg {
 	f = 0;
 	t = 0;
 }
-function buildLinefromJSOX( field,val ) {
-	try {
-		if( !field ) return this.line;
-		_debug_revive && console.log( "revive line f ield:", field );
-		switch( field ) {
-		case "from":
-			this.line.from = val;
-			break;
-		case "id":
-			this.line.id = val;
-			break;
-		case "r":
-			return this.line.r = val;
-			break;
-		case "to":
-			this.line.to = val;
-			break;
-		} 
-	}catch(err) {
-		console.log( "Line failure:", err );
-	}
-}
 
 class Line extends PoolMember{
 	r = new Ray();
@@ -451,26 +463,75 @@ class Line extends PoolMember{
 	#flags = { 
 		updated : false
 	}
-	
+	clone() {
+		return localParseState.world.getLine( this );
+	}	
 	constructor( set, opts ) {
 		super( set );
 		opts && this.set(opts)
 	}
-	toJSOX() {
-		if( !this.r.n.x&& !this.r.n.y &&!this.r.n.z )
+	set dirty(val) {
+		this.#flags.dirty = val;
+		this.on( "update", val );
+	}
+	get dirty() {
+		return this.#flags.dirty;
+	}
+
+	static toJSOX() {
+		if( !this.r.n.x&& !this.r.n.y &&!this.r.n.z ) {
+			console.trace( "Line being sent with a normal that is 0 long...", this );
 			debugger;
+		}
 		return JSOX.stringify( {id:this.id,r:this.r, t:this.to,f:this.from});
 	}
+	static fromJSOX( field,val ) {
+		try {
+			if( !field ) return this.line;
+			_debug_revive && console.log( "revive line f ield:", field );
+			switch( field ) {
+			case "from":
+				this.line.from = val;
+				break;
+			case "id":
+				this.line.id = val;
+				break;
+			case "r":
+				return this.line.r = val;
+				break;
+			case "to":
+				this.line.to = val;
+				break;
+			} 
+		}catch(err) {
+			console.log( "Line failure:", err );
+		}
+	}
+
 	set( opts ) {
+		let changed = false;
 		if( opts instanceof Line ){
 			if( isNaN( opts.r.n.x ) ) {
 				console.trace( "Found NaN");
 			}
-			this.r.set( opts.r );
-			this.from = opts.from;
-			this.to = opts.to;
+			if( !this.r.equals( opts.r ) ) {
+				this.r.set( opts.r );
+				changed = true;
+			}
+			if( this.from !== opts.from ) {
+				this.from = opts.from;
+				changed = true;
+			}
+			if( this.to !== opts.to ) {
+				this.to = opts.to;
+				changed = true;
+			}
+			if( changed ) {
+				this.on( "update" );
+			}
 		}
 		else if( opts.line && opts.line instanceof Line ){
+			console.trace( "passed a wall to duplicate line maybe?", opts );
 			this.r.set( opts.ray.r );
 			this.from = opts.f;
 			this.to = opts.t;
@@ -479,6 +540,7 @@ class Line extends PoolMember{
 
 		else if( "id" in opts ) { 
 			if( opts.id !== this.id ) throw new Error( "Mismatch ID");
+			console.trace( "passed a thing that looks like a line maybe?", opts );
 			this.r.set( opts.r );
 			this.from = opts.f;
 			this.to = opts.t;
@@ -489,7 +551,7 @@ class Line extends PoolMember{
 				this.to = opts.to;
 			}
 			this.#flags.updated = true;
-			this.on( "update", this );
+			this.on( "update" );
 		}
 		return this;
 	}
@@ -555,12 +617,14 @@ class Line extends PoolMember{
 			return false;
 		}
 	}
+
+	static makeOpenLine( r ) {
+		console.log( "Line needs r?", )
+		return new Line( null, { ray:r, from:-Infinity, to:Infinity } );
+	}
 	
 };
 
-Line.makeOpenLine = function( r ) {
-	return new Line( { ray:r, from:-Infinity, to:Infinity } );
-}
 
 //--------------------------------------------
 
@@ -571,9 +635,7 @@ function ASSERT(e) {
 class WallSet extends Pool {
 	constructor(parent) {
 		super( parent, Wall );
-
 	}
-
 }
 
 class WallMsg {
@@ -584,88 +646,38 @@ class WallMsg {
 	start_at_end = false;
 }
 
-function buildWallfromJSOX( field,val ) {
-	if( !field ) return this.wall;
-	_debug_revive && console.log( "revive wall field:", field, val );
-	switch( field ) {
-	case "end":
-		if( "undefined" === typeof val ) {
-				console.log( "end wall is passed undefined. ");
-				debugger;
-		}
-		_debug_revive && console.log( "WALL END SET TO :", val );
-		this.end = val;
-		if( val instanceof WallMsg )
-			this.wall.end = val.wall;
-		else
-			this.wall.end = val;
-		break;
-	case "end_at_end":
-		this.end_at_end = val;
-		break;
-	case "id":
-		this.wall.id = val;
-		break;
-	case "line":
-		this.line = val;
-		if( val instanceof LineMsg )
-			this.wall.line = val.line;
-		else
-			this.wall.line = val;
-		break;
-	case "into":
-		this.into = val;
-		this.wall.into = val && val;
-		break;
-	case "start":
-		this.start = val;
-		if( val instanceof WallMsg )
-		this.wall.start = val.wall;
-		else
-		this.wall.start = val;
-		break;
-	case "start_at_end":
-		this.wall.start_at_end = val;
-		break;
-	} 
-	return undefined;
-}
-
 function sectorToJSOX(stringifier ) {
 	return stringifier.stringify( this );
-}
-
-function wallToJSOX(stringifier) {
-	const keys = Object.keys( this );
-	keys.push( "id" );
-	const mirror = {};
-	for( let key of keys ) mirror[key] = this[key];
-	//console.log( "Stringify wall mirror:", mirror );
-	return stringifier.stringify( mirror );
 }
 
 
 class Wall extends PoolMember{
 	#flags = {
 		bUpdating : false, // set this while updating to prevent recursion..
-	   	detached : false, // joined by joined FAR
-		   bSkipMate: false, // used when updating sets of lines - avoid double update mating walls
-		   dirty : true,
+		detached : false, // joined by joined FAR
+		bSkipMate: false, // used when updating sets of lines - avoid double update mating walls
+		dirty : true,
 	};
-    //#world = null;
-    #sector = null;
-    //name = null;
-    line = null;
-    into = null; // mate - to new sector
+	//#world = null;
+	#sector = null;
+	//name = null;
+	line = null;
+	into = null; // mate - to new sector
 
-    start = null; // in same sector, mating wall
+	start = null; // in same sector, mating wall
 	start_at_end = false; // wall_at_start links from end of starting segment
-    end = null; // in same sector, mating wall
+	end = null; // in same sector, mating wall
 	end_at_end = false;   // wall_at_end links from end of ending segment
 	#from = new Vector();
 	#to = new Vector();
 
 	set(opts ) {
+		if( opts.line ) {
+			this.line = opts.line;
+			this.#sector = opts.sector;
+
+			return;
+		}
 		if( opts.mating ) {
 			if( opts.mating.into ) {
 				throw new Error( "Wall is alreadying mating another wall" );
@@ -758,6 +770,9 @@ class Wall extends PoolMember{
 	set sector(val) {
 		this.#sector = val;
 	}
+	get sector() {
+		return this.#sector;
+	}
 	weld( wall ) {
 		if( !this.into && !wall.into ) {
 			this.into = wall.into;
@@ -777,6 +792,219 @@ class Wall extends PoolMember{
 		}while( pCur != this );
 		return r;
 	}
+	
+	/**
+	 * splits a wall from the wall it's `into` associated with.
+	 * @returns 
+	 */
+	gap(  )  // splitWall
+	{
+		let other;
+		other = this.into;
+		if( !other )
+			return;
+		// duplicate line instance, and split into.
+		other.line = this.parent.lineSet.get( this.line );
+
+		other.into = null;
+		this.into = null;
+	}
+
+	/**
+	 * gaps any walls that are to the side of this wall.
+	 */
+	splitNear( ) // splitnearwalls
+	{
+		// this could very well be... a split of other near walls
+		// which would hmm.. how to track down these elusive near walls...
+
+		let start;
+		//this.parent.wallSet.get( )
+		if( ( start = this.start ) &&
+			start.into )
+		{
+			if( this.flags.wall_start_end )
+			{
+				if( start.end != this )
+					Log1( "We're confused about linkings... %d", __LINE__ );
+				else
+				{
+					const into = start.into.end;
+					if( into && into.into )
+						into.gap();
+				}
+			}
+			else
+			{
+				if( start.start != this )
+					Log1( "We're confused about linkings... %d", __LINE__ );
+				else
+				{
+					const into = start.into.start;
+					if( into && into.into )
+						into.gap();
+				}
+			}
+		}
+		if( ( start = this.end ) &&
+			start.into )
+		{
+			if( this.flags.wall_end_end )
+			{
+				if( start.end != this )
+					Log1( "We're confused about linkings... %d", __LINE__ );
+				else
+				{
+					const into = start.into.end;//GetSetMember( WALL, &world.walls, split );
+					if( into && startinto.into )
+						into.gap();
+				}
+			}
+			else
+			{
+				if( start.start != this )
+					Log1( "We're confused about linkings... %d", __LINE__ );
+				else
+				{
+					const into = start.into.start;//GetSetMember( WALL, &world.walls, split );
+					if( into && into.into )
+						into.gap();
+				}
+			}
+		}
+	}
+
+	addConnectedSector( wall, offset )
+	{
+		let ps;
+		const world = this.parent;//GetSetMember( WORLD, &g.worlds, iWorld );
+		const pOldSect = this;//wall.sector;
+
+		// build a new sector off of the given wall...
+		// returns current wall... 
+		if( !wall.into )
+		{
+			let pls;
+			let pNewWall;
+			let new_wall, lastwall;
+			let o = new Vector(), n = new Vector();
+			pls = wall.line;//GetSetMember( FLATLAND_MYLINESEG, &world.lines, wall.iLine );
+			ps = world.sectorSet.get();//GetFromSet( SECTOR, &world.sectors );
+
+			ps.name = null;
+			ps.texture = pOldSect.texture;
+
+			// Uses exactly the same line....
+			new_wall = world.wallSet.get( {line:wall.line, sector:ps} );
+			ps.wall = new_wall;
+
+			// fix up into links... for now new sectors are bi-directional
+			pNewWall.into = wall;
+			wall.into	 = pNewWall;
+
+			n.crossproduct( Vector.Z, pls.r.n );
+			n.normalize( );
+			o.add( n, pls.r.o );
+
+			if( pOldSect.contains( o ) )
+				n.scale( -1 );
+
+			o.addscaled( pls.r.o, pls.r.n, pls.dTo );
+			const wall1 = world.wallSet.get( {start:new_wall, end:null, startAtEnd:true, endAtEnd:false, using:{o, n} } );
+
+			o.addscaled( pls.r.o, pls.r.n, pls.dFrom );
+			const wall2 = world.wallSet.get( {start:new_wall, end:null, startAtEnd:false, endAtEnd:false, using:{o, n} } );
+
+			pls = wall.line.clone();
+			// give it some substanstial offset...
+			pls.r.o.addscaled( pls.r.o, n, offset );
+
+			lastwall = world.wallSet.get( { start:wall1, end:wall2, startAtEnd:true, endAtEnd:true, using:pls } );
+
+			//ComputeSectorPointList( iWorld, iSector, NULL );
+			//ComputeSectorOrigin( iWorld, iSector );
+
+			ps.r.n.set( Vector.Y );
+			{
+				//_POINT min, max;
+				//GetSectorMinMax( ps, min, max );
+			}
+			return lastwall ; // return last line created - opposing line fit for updating.
+		}
+		return this.insertConnectedSector( iWall, offset );
+	}
+
+	insertConnectedSector( wall, offset )
+	{
+		let pls;
+		let lastwall;
+		let new_wall;
+		let other_wall;
+		let ps;
+		let o = new Vector(), n = new Vector();
+	
+		wall.splitNear();
+
+		pls = wall.line;
+		other_wall = wall.into;
+	
+		ps = this.parent.sectorSet.get();
+		/*
+		{
+		char name[20];
+		sprintf( name, "%d", SectorIDs++ );
+		ps.name = GetName( &world.names, name );
+		}
+		*/
+		//ps.iWorld = iWorld;
+		//pls.refcount--; // gets incrementd in - but it's not really new...
+
+		new_wall  = this.parent.wallSet.get( { start:null, end:null, startAtEnd:true, endAtEnd:true, using:wall.line } );
+		new_wall.sector = ps;
+
+		ps.wall  = new_wall;
+		ps.texture = wall.sector.texture;
+
+		new_wall.into = iWall;
+		wall.into	 = new_wall;
+	
+		n.crossproduct( VectorConst_Z, pls.r.n );
+		n.normalize( );
+		o.add( n, pls.r.o );
+		if( sector.contains( o ) )
+			scale( n, n, -1 );
+	
+		o.addscaled( pls.r.o, pls.r.n, pls.dTo );
+		this.parent.wallSet.get( { start:new_wall, end:null, startAtEnd:true, endAtEnd:false, using:{o, n} } );
+		//CreateWall( iWorld, iSector, new_wall, TRUE, INVALID_INDEX, FALSE, o, n );
+	
+		o.addscaled( pls.r.o, pls.r.n, pls.dFrom );
+		this.parent.wallSet.get( { start:new_wall, end:null, startAtEnd:false, endAtEnd:false, using:{o, n} } );
+		//CreateWall( iWorld, iSector, new_wall, FALSE, INVALID_INDEX, FALSE, o, n );
+	
+		pls = this.parent.lineSet.get( wall.line );
+		// scale give it some substanstial offset...
+		pls.r.o.addscaled( pls.r.o, n, offset );
+		lastwall = this.parent.wallSet.get( { start:new_wall.start, end:new_wall.end, startAtEnd:true, endAtEnd:true, using:pls } );
+
+		lastwall.into   = wall.into;
+		other_wall.line	  = lastwall.line;
+		pls = other_wall.line;
+		other_wall.into = lastwall;
+
+		//UpdateMatingLines( iWorld, iLastWall, FALSE, FALSE );
+	
+		////ComputeSectorPointList( iWorld, lastwall.iSector, NULL );
+		////ComputeSectorOrigin( iWorld, lastwall.iSector );
+
+		//MarkSectorUpdated( iWorld, lastwall.iSector );
+
+		lastwall.sector.r.n.set( VectorConst_Y );
+	
+		return lastwall;
+	}
+
+
 	updateMating( walls, bLockSlope, bErrorOK ){
 		//PWORLD world = GetSetMember( WORLD, &g.worlds, iWorld );
 		const result = {
@@ -1263,6 +1491,63 @@ class Wall extends PoolMember{
 
 	}
 
+	static fromJSOX( field,val ) {
+		// this is the object being parsed - it would have been a 'new Wall()'
+		if( !field ) return this.wall;
+		_debug_revive && console.log( "revive wall field:", field, val );
+		switch( field ) {
+		case "end":
+			if( "undefined" === typeof val ) {
+					console.log( "end wall is passed undefined. ");
+					debugger;
+			}
+			_debug_revive && console.log( "WALL END SET TO :", val );
+			this.end = val;
+			if( val instanceof WallMsg )
+				this.wall.end = val.wall;
+			else
+				this.wall.end = val;
+			break;
+		case "end_at_end":
+			this.end_at_end = val;
+			break;
+		case "id":
+			this.wall.id = val;
+			break;
+		case "line":
+			this.line = val;
+			if( val instanceof LineMsg )
+				this.wall.line = val.line;
+			else
+				this.wall.line = val;
+			break;
+		case "into":
+			this.into = val;
+			this.wall.into = val && val;
+			break;
+		case "start":
+			this.start = val;
+			if( val instanceof WallMsg )
+			this.wall.start = val.wall;
+			else
+			this.wall.start = val;
+			break;
+		case "start_at_end":
+			this.wall.start_at_end = val;
+			break;
+		} 
+		return undefined;
+	}
+
+	static toJSOX(stringifier) {
+		const keys = Object.keys( this );
+		keys.push( "id" );
+		const mirror = {};
+		for( let key of keys ) mirror[key] = this[key];
+		//console.log( "Stringify wall mirror:", mirror );
+		return stringifier.stringify( mirror );
+	}
+
 	
 }
 
@@ -1279,26 +1564,6 @@ class SectorMsg {
 	sector = localParseState.world.getSector();
 }
 
-function buildSectorfromJSOX( field,val ) {
-	try {
-	if( !field ) {
-		this.sector.dirty = true;
-		return this.sector;
-	} else {
-		if( field === "id" ) { this.sector.id = val; return undefined; }
-		if( field === "name" ) { this.sector.name = val; return undefined; }
-		if( field === 'r' ) return this.sector.r = val; // have to replace this.
-		if( field === "texture" ) { this.sector.texture = val; return undefined; }
-		if( field === "wall" ) { this.sector.wall = val; return undefined; }
-		//if( field === "flags" ) { return this.sector.flags; }
-		
-		console.log( "GET:", field );
-		return val;
-	}
-	}catch(err) {
-		console.log( "Failure in sector reviver:", err );
-	}
-}
 
 class Sector extends PoolMember{
 	#flags = {
@@ -1315,9 +1580,16 @@ class Sector extends PoolMember{
 
 	// processed point list..
 	#pointlist = [];
-	   #facet = null;
-	   #set = null;
+	#facet = null;
+	#set = null;
 
+	set dirty(val) {
+		this.#flags.dirty = val;
+		this.on( "update", val );
+	}
+	get dirty() {
+		return this.#flags.dirty;
+	}
 	set(opts ) {
 		if( "id" in opts ) {
 			this.r.set( opts.r );
@@ -1355,10 +1627,6 @@ class Sector extends PoolMember{
 			if( wall === test ) return true;
 			test = test.next(fromEnd);
 		}while( test !== start );
-	}
-	set dirty(val) {
-		this.#flags.dirty = true;
-		this.on( "smudge" );
 	}
 	toJSOX() {
 		// right now only the ogrigin changes
@@ -1547,6 +1815,29 @@ class Sector extends PoolMember{
 		return walls;
 	}
 
+	
+
+	static fromJSOX( field,val ) {
+		try {
+		if( !field ) {
+			this.sector.dirty = true;
+			return this.sector;
+		} else {
+			if( field === "id" ) { this.sector.id = val; return undefined; }
+			if( field === "name" ) { this.sector.name = val; return undefined; }
+			if( field === 'r' ) return this.sector.r = val; // have to replace this.
+			if( field === "texture" ) { this.sector.texture = val; return undefined; }
+			if( field === "wall" ) { this.sector.wall = val; return undefined; }
+			//if( field === "flags" ) { return this.sector.flags; }
+			
+			console.log( "GET:", field );
+			return val;
+		}
+		}catch(err) {
+			console.log( "Failure in sector reviver:", err );
+		}
+	}
+
 }
 
 //--------------------------------------------
@@ -1597,7 +1888,7 @@ class UndoRecord
 {
 	type = 0; // from enum
 
-        data = null;  // depends on type
+	data = null;  // depends on type
 /*        
 	union {
 		struct {
@@ -1788,25 +2079,37 @@ class World {
 	CRITICALSECTION csDeletions;
 	struct all_flagset deletions;
 */
+
+
+	static fromJSOX( field, val ) {
+		//console.log( "FIELD:", field );
+		if( !field ) {
+			return this.world;
+		}
+		return val;//this.world[field]  /// element allocation comes directly from the correct arrays anyway.
+	}
+
+	/** @nocollapse */
+	/*
+	static fromJSOX( field,val ) {
+		if( !field ) {
+			if( this instanceof WorldMsg ){
+				console.log( "Create new world from world message");
+                           return new World( this );
+			}
+		}else {        	
+			this[field] = val;
+			return undefined;
+		}
+	}
+	*/
+	/** @nocollapse */
+	static toJSOX(stringifier) {
+		return this.toJSOX(stringifier);
+	}
+
 }
 
-const tmp = null;
-/** @nocollapse */
-World.fromJSOX = function( field,val ) {
-	if( !field ) {
-		if( this instanceof WorldMsg ){
-			console.log( "Create new world from world message");
-                        return new World( this );
-		}
-	}else {        	
-		this[field] = val;
-		return undefined;
-	}
-}
-/** @nocollapse */
-World.toJSOX = function(stringifier) {
-	return this.toJSOX(stringifier);
-}
 
 class WorldMsg {
 	world = new World();
@@ -1819,13 +2122,6 @@ class WorldMsg {
 	}
 }
 
-function buildWorldfromJSOX( field, val ) {
-	//console.log( "FIELD:", field );
-	if( !field ) {
-		return this.world;
-	}
-	return val;//this.world[field]  /// element allocation comes directly from the correct arrays anyway.
-}
 
 /*
 World.revive = function(field,val) {
@@ -1840,28 +2136,28 @@ World.revive = function(field,val) {
 
 
 const classes = {
-	World:World,
-	Sector:Sector,
-	Wall:Wall,
-	Line:Line,
-	Name:Name,
-	Texture:Texture,
-	UndoRecord:UndoRecord,
+	World,
+	Sector,
+	Wall,
+	Line,
+	Name,
+	Texture,
+	UndoRecord,
 
 	setDecoders(jsox) {
-		jsox.fromJSOX( "~Wr", WorldMsg, buildWorldfromJSOX );
-		jsox.fromJSOX( "~S", SectorMsg, buildSectorfromJSOX );
-		jsox.fromJSOX( "~Wl", WallMsg, buildWallfromJSOX );
-		jsox.fromJSOX( "~L", LineMsg, buildLinefromJSOX );
-		jsox.fromJSOX( "~N", NameMsg, buildNamefromJSOX );
-		jsox.fromJSOX( "~T", TextureMsg, buildTexturefromJSOX );
+		jsox.fromJSOX( "~Wr", WorldMsg, World.fromJSOX );
+		jsox.fromJSOX( "~S", SectorMsg, Sector.fromJSOX );
+		jsox.fromJSOX( "~Wl", WallMsg, Wall.fromJSOX );
+		jsox.fromJSOX( "~L", LineMsg, Line.fromJSOX );
+		jsox.fromJSOX( "~N", NameMsg, Name.fromJSOX );
+		jsox.fromJSOX( "~T", TextureMsg, Texture.fromJSOX );
 		jsox.fromJSOX( "v3", Vector );
 		jsox.fromJSOX( "r", Ray );
 	},
 	setEncoders(jsox) {
 		jsox.toJSOX( "~Wr", World, World.toJSOX );
 		jsox.toJSOX( "~S", Sector/*, sectorToJSOX*/ );
-		jsox.toJSOX( "~Wl", Wall, wallToJSOX );
+		jsox.toJSOX( "~Wl", Wall, Wall.toJSOX );
 		jsox.toJSOX( "~L", Line );
 		jsox.toJSOX( "~N", Name );
 		jsox.toJSOX( "~T", Texture );
@@ -1875,3 +2171,4 @@ const classes = {
 
 
 export {classes, World,Sector,Wall,Line,Name,Texture,UndoRecord,Vector}
+export default classes;

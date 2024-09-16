@@ -303,8 +303,8 @@ span {
 				font-weight:bold;
 		}
 
-.popup{
-	/* visibility:hidden; */
+[class^="popup-menu"] {
+	visibility:hidden;
 	/*right:0;*/
 	top:48px;
 	background-color: #666;
@@ -316,25 +316,25 @@ span {
 	border-color:white;
 	border-width:2;
 	border-style:solid;
-	font-size:150%;
 }
 /* Change the background color on mouse-over */
-.popup a:hover {
+a[class^="popup-item"]:hover {
   background-color: #ddd;
   color: black;
   text-decoration:underline;
 }
 
-.popup a {
+a[class^="popup-item"]  {
   background-color: #555;
   color: white;
 }
 
 /* Style the active/current link*/
-.popup a.active {
+a[class^="popup-item"]:active {
   background-color: dodgerblue;
   color: white;
 }
+
 	
 div.mouseCatcher{
     width: 100%;

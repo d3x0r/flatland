@@ -7,7 +7,7 @@ const app = document.getElementById( "AppContainer" );
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
 import {popups,Popup} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {ObjectStorage} from "/node_modules/@d3x0r/object-storage/object-storage-remote.mjs"
-import {workerInterface}  from "/node_modules/@d3x0r/socket-service/swc.js";
+//import {workerInterface}  from "/node_modules/@d3x0r/socket-service/swc.js";
 
 import {classes,Vector} from "./flatland.classes.mjs"
 const parser =  JSOX.begin(processMessage);
@@ -38,11 +38,26 @@ const l = {
 
 //import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 import loginServer from "/internal/loginServer";
-const wsc = await import( ( ("http://"+loginServer.loginRemote+":"+loginServer.loginRemotePort) || "https://d3x0r.org:8089" ) + "/login/webSocketClient.js" ).then( (module)=>{
-	console.log("Thing:", module );
-	beginLogin( module.openSocket, module.connection );
-	return module;
-} );
+const loginInterface = ( ("https://"+loginServer.loginRemote+":"+loginServer.loginRemotePort) || "https://d3x0r.org:8089" ) + "/login/webSocketClient.js";
+
+let n = 0;
+let loginDone = false;
+
+async function firstConnect() {
+	return await import( loginInterface+"?"+n++ ).then( (module)=>{
+		//console.log("Thing:", module );
+		beginLogin( module.openSocket, module.connection );
+		return module;
+	} ).catch( (err)=>{
+		//console.log( "err:", err );
+		return new Promise( (res,rej)=>{
+			setTimeout( ()=>firstConnect().then( res ), 5000 );
+		} );
+	} );
+}
+// gets login interface from login server
+// blocks until a connection happens - should be a temporary thing that it blocks...
+const wsc = await firstConnect();
 
 //import {connection,Alert,openSocket} from "/login/webSocketClient.js";
 
@@ -52,18 +67,28 @@ function beginLogin( openSocket, connection ) {
 	let login = openSocket().then( (socket)=>{
 		console.log( "Open socket finally happened?", socket );
 			//login = socket;
-      socket.setUiLoader();
+		socket.setUiLoader();
+		connection.on( "close", (code, reason)=>{
+			if( !l.login ) {
+				console.log( "Closed login before login; refresh page" );
+				location.href=location.href;
+			} else {
+				console.log( "Let GC have this socket, auth is already done" );
+			}
+		} ) 
 		connection.loginForm = popups.makeLoginForm( (token)=>{
 				console.log( "login completed...", token );
-        			token.request( "d3x0r.org", "flatland" ).then( (token)=>{
+        		connection.request( "d3x0r.org", "flatland" ).then( (token)=>{
 					;
-				console.log( "flatland request:" );
-				        l.login = token; // this is 'connection' also.
+					console.log( "flatland request:", token );
+				   l.login = token; // this is 'connection' also.
+				   connection.loginForm.hide();
+					socket.close( 1000, "Thank You.");
 					openGameSocket( token.svc.key );
 				} );
 			}
 			, {wsLoginClient:connection ,
-				useForm: "https://d3x0r.org:8089/login/loginForm.html",
+				useForm: ("http://"+loginServer.loginRemote+":"+loginServer.loginRemotePort) + "/login/loginForm.html",
 				parent: app
 			} );
 
@@ -74,6 +99,7 @@ function beginLogin( openSocket, connection ) {
 }
 
 function openGameSocket( uid ) {
+	// this COULD use workerInterface to create the socket instead...
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
 	const oldSend = ws.send.bind( ws);
 	ws.send = function(Msg) {
@@ -90,7 +116,7 @@ function openGameSocket( uid ) {
 
 		console.log( "What if login should have given a token..." );
 		
-		l.ws.send( `{op:worlds,user:${uid}}` );
+		l.ws.send( `{op:worlds,user:'${uid}'}` );
 		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
@@ -665,6 +691,9 @@ function setupWorld( world ) {
 	const editor = new popups.create( "World Editor", app );
 	const canvas = l.canvas = document.createElement( "canvas" );
 	const popup = setupMenu();
+	
+	editor.appendChild( canvas );
+	
 	canvas.requestPointerLock = canvas.requestPointerLock ||
                             canvas.mozRequestPointerLock;
 	editor.divContent.style.position = "relative";
@@ -755,16 +784,16 @@ function setupWorld( world ) {
 			l.yOfs += ry;
 		}
 		if( mouse.mouseLock.drag && mouse.mouseLock.near ) {
-			if(mouse.mouseLock.to === "CurSecOrigin")
-				l.ws.send( `{op:move,t:S,id:${mouse.CurSector.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
-			if(mouse.mouseLock.to === "CurEnds[0]")
-				l.ws.send( `{op:move,t:e0,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
-			if(mouse.mouseLock.to === "curEnds[1]")
-				l.ws.send( `{op:move,t:e1,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
-			if(mouse.mouseLock.to === "CurSlope")
-				l.ws.send( `{op:move,t:s,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
-			if(mouse.mouseLock.to === "CurOrigin")
-				l.ws.send( `{op:move,t:o,id:${mouse.CurWall.id},lock:${editorState.lockSlope},x:${rx},y:${ry}}`)
+			const t = (mouse.mouseLock.to === "CurSecOrigin")?"s"
+				:(mouse.mouseLock.to === "CurEnds[0]")?"e0"
+				:(mouse.mouseLock.to === "CurEnds[1]")?"e1"
+				:(mouse.mouseLock.to === "CurSlope")?"s"
+				:(mouse.mouseLock.to === "CurOrigin")?"o":"";
+				if( !t ) {
+					console.log( "Seelction not found?", mouse.mouseLock.to );
+				}
+			// initial offset of newly created wall is realtive to My scale...
+			l.ws.send( `{op:move,t:${t},id:${mouse.CurSector&&mouse.CurSector.id},wid:${mouse.CurWall.id},scale:${l.scale},lockCreate:${editorState.lockCreate},lockSlope:${editorState.lockSlope},lockLineOrigin:${editorState.lockLineOrigin},x:${rx},y:${ry}}`)
 		}
 
 		else {
@@ -983,16 +1012,27 @@ function processMessage( msg ) {
 		console.log( "add World Live" );
 		l.editor = selector.addWorld( msg.world );
 	} else if( msg.op === "Line" ) {
+		// update line message (from world update?)
 		l.refresh = true;
-		l.world.lines[msg.id].set(JSOX.parse(msg.data));
+		l.world.lines[msg.id].set(msg.data);
+	} else if( msg.op === "line" ) {
+		// create line message....
+		l.refresh = true;
+		l.world.lines[msg.id].set(msg.data);
 	} else if( msg.op === "Sector" ) {
-		l.world.sectors[msg.id].set(JSOX.parse(msg.data));
+		l.world.sectors[msg.id].set(msg.data);
 		l.refresh = true;
 	} else if( msg.op === "wall" ) {
-		l.world.walls[msg.id].set(JSOX.parse(msg.data));
+		l.world.walls[msg.id].set(msg.data);
 	} else if( msg.op === "create" ) {
+		console.log( "Create is mostly unimplemented:", msg );
 		if( msg.sub === "sector" ) {
 		}	
+	} else if( msg.op === "use" ) {
+		if( msg.t === "W" ) {
+			mouse.CurWalls.length = 0;
+			mouse.CurWalls.push( l.world.walls[msg.id] );
+		}
 	} else if( msg.op === "move" ) {
 		if( msg.t === "S" ) {
 			// sector
