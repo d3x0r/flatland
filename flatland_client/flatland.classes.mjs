@@ -342,6 +342,15 @@ class Vector {
 	static X = new Vector(1,0,0);
 	static Y = new Vector(0,1,0);
 	static Z = new Vector(0,0,1);
+	equals(a) {
+		const yes = ( this.x == a.x && this.y == a.y && this.z == a.z );
+		if( !yes ) {
+			// if they are near each other they can be equal...
+			if( Math.abs(this.x-a.x)+Math.abs(this.y-a.y)+Math.abs(this.z-a.z) < 0.0000001 )
+				return true;
+		}
+		return yes;
+	}
 }
 
 //--------------------------------------------
@@ -361,6 +370,9 @@ class Ray {
 		if( !opts.n.x && !opts.n.y && !opts.n.z )
 			debugger;
 		return this;
+	}
+	equals(a){
+		return this.o.equals(a.o) && this.n.equals(a.n);
 	}
 }
 
@@ -478,7 +490,7 @@ class Line extends PoolMember{
 		return this.#flags.dirty;
 	}
 
-	static toJSOX() {
+	toJSOX() {
 		if( !this.r.n.x&& !this.r.n.y &&!this.r.n.z ) {
 			console.trace( "Line being sent with a normal that is 0 long...", this );
 			debugger;
@@ -1420,8 +1432,9 @@ class Wall extends PoolMember{
 	move( x, y, lock ) {
 		this.line.r.o.x += x;
 		this.line.r.o.y += y;
+		
 		const walls = [];		
-		this.updateMating( walls, true, false );
+		this.updateMating( walls, false, false );
 		for( let wall of walls )
 			wall.line.on("update", wall.line );
 	}
@@ -1437,25 +1450,39 @@ class Wall extends PoolMember{
 
 	}
 
-	setStart(x,y, lock){
+	setStart(x,y, mateLock, lock){
 		const startWas = this.from;
 		const endWas = this.to;
+		if( lock ) {
+			const newX = startWas.x + x;
+			const newY = startWas.y + y;
+			const newZ = startWas.z + 0;
 
-		const newX = startWas.x + x;
-		const newY = startWas.y + y;
-		const newZ = startWas.z + 0;
+			//this.line.r.o.x = (newX + endWas.x)/2
+			//this.line.r.o.y = (newY + endWas.y)/2
+			//this.line.r.o.z = (newZ + endWas.z)/2
+			//this.line.from = -0.5;
+			//this.line.to = 0.5;
+			this.line.r.n.x = this.line.r.o.x - newX;
+			this.line.r.n.y = this.line.r.o.y - newY;
+			this.line.r.n.z = this.line.r.o.z - newZ;
 
-		this.line.r.o.x = (newX + endWas.x)/2
-		this.line.r.o.y = (newY + endWas.y)/2
-		this.line.r.o.z = (newZ + endWas.z)/2
-		this.line.from = -0.5;
-		this.line.to = 0.5;
-		this.line.r.n.x = endWas.x - newX;
-		this.line.r.n.y = endWas.y - newY;
-		this.line.r.n.z = endWas.z - newZ;
+		} else {
+			const newX = startWas.x + x;
+			const newY = startWas.y + y;
+			const newZ = startWas.z + 0;
 
+			this.line.r.o.x = (newX + endWas.x)/2
+			this.line.r.o.y = (newY + endWas.y)/2
+			this.line.r.o.z = (newZ + endWas.z)/2
+			this.line.from = -0.5;
+			this.line.to = 0.5;
+			this.line.r.n.x = endWas.x - newX;
+			this.line.r.n.y = endWas.y - newY;
+			this.line.r.n.z = endWas.z - newZ;
+		}
 		const walls = [];		
-		if( this.updateMating( walls, lock, false ) ) {
+		if( this.updateMating( walls, mateLock, false ) ) {
 		//console.log( "Update list:", walls.length );
 		for( let wall of walls ) {
 			//console.log( "Sending wall ", wall.id );
@@ -1465,28 +1492,42 @@ class Wall extends PoolMember{
 		//console.log( "LINE RESULT after:", this.line.r, this.line );
 
 	}
-	setEnd(x,y, lock){
+	setEnd(x,y, lock, mateLock){
 		const startWas = this.from;
 		const endWas = this.to;
+		if( lock ) {
+			const newX = endWas.x + x;
+			const newY = endWas.y + y;
+			const newZ = endWas.z + 0;
 
-		const newX = endWas.x + x;
-		const newY = endWas.y + y;
-		const newZ = endWas.z + 0;
+			//this.line.r.o.x = (newX + endWas.x)/2
+			//this.line.r.o.y = (newY + endWas.y)/2
+			//this.line.r.o.z = (newZ + endWas.z)/2
+			//this.line.from = -0.5;
+			//this.line.to = 0.5;
+			this.line.r.n.x = newX - this.line.r.o.x;
+			this.line.r.n.y = newY - this.line.r.o.y;
+			this.line.r.n.z = newZ - this.line.r.o.z;
 
-		this.line.r.o.x = (startWas.x + newX)/2
-		this.line.r.o.y = (startWas.y + newY)/2
-		this.line.r.o.z = (startWas.z + newZ)/2
-		this.line.from = -0.5;
-		this.line.to = 0.5;
-		this.line.r.n.x = newX - startWas.x;
-		this.line.r.n.y = newY - startWas.y;
-		this.line.r.n.z = newZ - startWas.z;
+		} else {
 
+			const newX = endWas.x + x;
+			const newY = endWas.y + y;
+			const newZ = endWas.z + 0;
+
+			this.line.r.o.x = (startWas.x + newX)/2
+			this.line.r.o.y = (startWas.y + newY)/2
+			this.line.r.o.z = (startWas.z + newZ)/2
+			this.line.from = -0.5;
+			this.line.to = 0.5;
+			this.line.r.n.x = newX - startWas.x;
+			this.line.r.n.y = newY - startWas.y;
+			this.line.r.n.z = newZ - startWas.z;
+		}
 		const walls = [];		
-		if( this.updateMating( walls, lock, false ) ){
-		//console.log( "Update list2:", walls.length );
-		for( let wall of walls )
-			wall.line.on("update", wall.line );
+		if( this.updateMating( walls, mateLock, false ) ){
+			//console.log( "Update list2:", walls.length );
+			walls.forEach( wall=>wall.line.on("update", wall.line ) )
 		}
 
 	}
@@ -1539,7 +1580,7 @@ class Wall extends PoolMember{
 		return undefined;
 	}
 
-	static toJSOX(stringifier) {
+	toJSOX(stringifier) {
 		const keys = Object.keys( this );
 		keys.push( "id" );
 		const mirror = {};
@@ -1591,8 +1632,10 @@ class Sector extends PoolMember{
 		return this.#flags.dirty;
 	}
 	set(opts ) {
-		if( "id" in opts ) {
+		if( "r" in opts ) {
 			this.r.set( opts.r );
+		}
+		if( "id" in opts ) {
 			if( this.name === null ) this.name = null;
 			else this.name = this.parent.names[this.name];
 			this.#flags.dirty = true;
@@ -1603,8 +1646,9 @@ class Sector extends PoolMember{
 			this.r.n.y = opts.normal.y;
 			this.r.n.z = opts.normal.z;
 		}
-		if( !opts.firstWall ) throw new Error( "Sector initialization requires a wall.");
-		( this.wall = opts.firstWall ).sector = this;
+		if( !opts.firstWall ) 
+			;//throw new Error( "Sector initialization requires a wall.");
+		else ( this.wall = opts.firstWall ).sector = this;
 	}
 	constructor( set, opts  ) {
 		super( set );
@@ -2033,7 +2077,7 @@ class World {
 
 	moveSector( id, x, y, lock ){
 		const sector = this.sectors[id];
-		console.log( "move sector:", sector, id, x, y );
+		//console.log( "move sector:", sector, id, x, y );
 		const walls = sector.move( x, y, lock );
 		//console.log( "TRIGGER UPDATE", walls, this.#events );
 		if( walls.length )

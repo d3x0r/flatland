@@ -29,7 +29,12 @@ const l = {
 	yOfs : 0,
 	w : 0,
 	h : 0,
-	cursor : newImage( "cursor.png" ),
+	cursor : newImage( "cursor.png" ).then( img=>{
+		l.cursor = img;
+		l.cursorNot = processImage( img );
+		return img;
+	}),
+	cursorNot : null,
 	cursorSpot : {x:5, y:5},
 	storage : null,
 	root : null,
@@ -77,18 +82,21 @@ function beginLogin( openSocket, connection ) {
 			}
 		} ) 
 		connection.loginForm = popups.makeLoginForm( (token)=>{
-				console.log( "login completed...", token );
-        		connection.request( "d3x0r.org", "flatland" ).then( (token)=>{
-					;
-					console.log( "flatland request:", token );
-				   l.login = token; // this is 'connection' also.
-				   connection.loginForm.hide();
-					socket.close( 1000, "Thank You.");
-					openGameSocket( token.svc.key );
-				} );
+			// this token == true
+			//console.log( "login completed...", token );
+				if( token )
+					connection.request( "d3x0r.org", "flatland" ).then( (token)=>{
+						;
+						//console.log( "flatland request:", token );
+						l.login = token; // this is 'connection' also.
+						// token.name, token.svc, svc.addr.port, svc.addr.addr[], svc.key
+						connection.loginForm.hide();
+						socket.close( 1000, "Thank You.");
+						openGameSocket( token.name, token.svc.key );
+					} );
 			}
 			, {wsLoginClient:connection ,
-				useForm: ("http://"+loginServer.loginRemote+":"+loginServer.loginRemotePort) + "/login/loginForm.html",
+				useForm: (location.protocol+"//"+loginServer.loginRemote+":"+loginServer.loginRemotePort) + "/login/loginForm.html",
 				parent: app
 			} );
 
@@ -98,7 +106,7 @@ function beginLogin( openSocket, connection ) {
 
 }
 
-function openGameSocket( uid ) {
+function openGameSocket( uid, key ) {
 	// this COULD use workerInterface to create the socket instead...
 	var ws = new WebSocket((location.protocol==="http:"?"ws://":"wss://")+location.host+"/", "Flatland");
 	const oldSend = ws.send.bind( ws);
@@ -107,7 +115,6 @@ function openGameSocket( uid ) {
 		oldSend( Msg );
 	}
 
-	l.storage = new ObjectStorage( ws );
 	
 	ws.onopen = function() {
 		// Web Socket is connected. You can send data by send() method.
@@ -116,7 +123,7 @@ function openGameSocket( uid ) {
 
 		console.log( "What if login should have given a token..." );
 		
-		l.ws.send( `{op:worlds,user:'${uid}'}` );
+		l.ws.send( `{op:worlds,user:${JSOX.stringify(uid)},key:${JSOX.stringify(key)}}` );
 		//l.ws.send( '{op:worlds}' );
 	};
 	ws.onmessage = function (evt) { 				
@@ -125,7 +132,7 @@ function openGameSocket( uid ) {
 	};
 	ws.onclose = function() { 
 		l.ws = null;
-		setTimeout( openGameSocket, 5000 ); // 5 second delay.
+		setTimeout( ()=>openGameSocket( uid, key ), 5000 ); // 5 second delay.
 		if( l.editor ) {
 			l.editor.remove();
 			l.editor = null;
@@ -133,6 +140,7 @@ function openGameSocket( uid ) {
 		}
 		// websocket is closed. 
 	};
+	l.storage = new ObjectStorage( ws );
 }
 
 //----------- World Selector ------------------------------
@@ -266,8 +274,9 @@ let mouse = {
 	, CurSlope : null
 	, CurEnds : [null,null]
 
-	, CurSector : null
-	, CurSectors : []
+	, CurSector : null // the current
+	, priorCurrentSector : null // the last current known
+	, CurSectors : [] // multiselect
 	, CurWall:null
 	, CurWalls : []
 	//, 
@@ -288,32 +297,33 @@ let mouse = {
 	, isNear(o,n) {
 		if( mouse.mouseLock.near ){
 			if( !mouse.mouseLock.drag && !Near( mouse.mouseLock.near, o, REAL_SCALE(mouse.mouseLock.del)  ) ) {
+				mouse.mouseLock.to='';
 				mouse.mouseLock.near = null;
 			}
 		}else {
 			if( Near( o, mouse.CurSecOrigin, REAL_SCALE(10) ) ){
 				mouse.mouseLock.near = mouse.CurSecOrigin;
-				mouse.mouseLock.to = "CurSecOrigin";
+				mouse.mouseLock.to += "CurSecOrigin";
 				mouse.mouseLock.del = 30;
 			}
 			if( Near( o, mouse.CurEnds[0], REAL_SCALE(10) ) ){
 				mouse.mouseLock.near = mouse.CurEnds[0];
-				mouse.mouseLock.to = "CurEnds[0]";
+				mouse.mouseLock.to += "CurEnds[0]";
 				mouse.mouseLock.del = 30;
 			}
 			if( Near( o, mouse.CurEnds[1], REAL_SCALE(10) ) ){
 				mouse.mouseLock.near = mouse.CurEnds[1];
-				mouse.mouseLock.to = "curEnds[1]";
+				mouse.mouseLock.to += "CurEnds[1]";
 				mouse.mouseLock.del = 30;
 			}
 			if( Near( o, mouse.CurSlope, REAL_SCALE(10) ) ){
 				mouse.mouseLock.near = mouse.CurSlope;
-				mouse.mouseLock.to = "CurSlope";
+				mouse.mouseLock.to += "CurSlope";
 				mouse.mouseLock.del = 30;
 			}
 			if( Near( o, mouse.CurOrigin, REAL_SCALE(10) ) ){
 				mouse.mouseLock.near = mouse.CurOrigin;
-				mouse.mouseLock.to = "CurOrigin";
+				mouse.mouseLock.to += "CurOrigin";
 				mouse.mouseLock.del = 30;
 			}
 		}
@@ -355,10 +365,15 @@ function canvasRedraw() {
 		const o = sector.origin;
 		if( sector === mouse.CurSector ) {
 			mouse.CurSecOrigin = o;
-			
+
+			ctx.font = "bold 30px serif";
+			ctx.fillText( ""+mouse.mouseLock.to, DISPLAY_X( o.x ), DISPLAY_Y(o.y)-20 );
+			//ctx.fillText( ""+(mouse.CurWall && mouse.CurWall.id) + (mouse.CurWall && mouse.CurWall.line.id), DISPLAY_X( o.x ), DISPLAY_Y(o.y)-0 );
 			triangle( o.x, o.y, ( mouse.mouseLock.near === mouse.CurSecOrigin )?selectedHotSpot:  selectedSectorStroke );
 		}
 		else {
+			ctx.font = "30px serif";
+			ctx.fillText( ""+mouse.mouseLock.to,  DISPLAY_X( o.x ), DISPLAY_Y(o.y)-20 );
 			triangle( o.x, o.y,( mouse.mouseLock.near === mouse.CurSecOrigin )?selectedHotSpot: unselectedSectorStroke );
 		}
 
@@ -375,6 +390,12 @@ function canvasRedraw() {
 			ctx.beginPath();
 			let selected = false;
 			if( sector === mouse.CurSector ){
+				if( check === mouse.CurWall ) {
+					ctx.strokeStyle = selectedWallStroke;
+				} else {
+					ctx.strokeStyle = unselectedWallStroke;
+				}
+			} else if( sector === mouse.priorCurrentSector ){
 				if( check === mouse.CurWall ) {
 					ctx.strokeStyle = selectedWallStroke;
 				} else {
@@ -655,8 +676,8 @@ function canvasRedraw() {
 }
 
 function drawCursor() {
-	if(document.pointerLockElement === l.canvas ||
-		document.mozPointerLockElement === l.canvas) {
+	//if(document.pointerLockElement === l.canvas ||
+	//	document.mozPointerLockElement === l.canvas) {
 			const near = mouse.mouseLock.near;
 			if( near ){
 
@@ -665,9 +686,9 @@ function drawCursor() {
 			else
 		  //console.log('The pointer lock status is now locked');
 		  		l.worldCtx.drawImage( l.cursor, mouse.pos.x, mouse.pos.y );
-	  } else {
+	  //} else {
 		  //console.log('The pointer lock status is now unlocked');
-	  }
+	  //}
 }
 
 
@@ -752,6 +773,39 @@ function setupWorld( world ) {
 	}
 
 
+	function  updateWall(pNewWall) {
+		if( mouse.CurWall != pNewWall ) {
+			// curwall from
+			if( mouse.CurEnds[0] )
+				if( mouse.mouseLock.to == "CurEnds[0]" ){
+					if( mouse.CurEnds[0].equals( pNewWall.to ) ) {
+						mouse.mouseLock.near = pNewWall.to;
+						mouse.mouseLock.to = "CurEnds[1]";
+					}
+					if( mouse.CurEnds[0].equals( pNewWall.from ) ) {
+						mouse.mouseLock.near = pNewWall.from;
+						//mouse.mouseLock.to = "CurEnds[0]";
+					}
+				}
+		
+			if( mouse.CurEnds[1] )
+				if( mouse.mouseLock.to == "CurEnds[1]" ){
+					if( mouse.CurEnds[1].equals( pNewWall.to ) ) {
+						mouse.mouseLock.near = pNewWall.to;
+						//mouse.mouseLock.to = "CurEnds[1]";
+					}
+					if( mouse.CurEnds[1].equals( pNewWall.from ) ) {
+						mouse.mouseLock.near = pNewWall.from;
+						mouse.mouseLock.to = "CurEnds[0]";
+					}
+				}
+				mouse.CurWall = pNewWall;
+				mouse.CurWalls.push( pNewWall );
+		}
+
+	}
+
+
 	canvas.addEventListener( "mousemove", (evt)=>{
 		var rect = canvas.getBoundingClientRect();
 		const x = evt.clientX - rect.left;
@@ -784,16 +838,17 @@ function setupWorld( world ) {
 			l.yOfs += ry;
 		}
 		if( mouse.mouseLock.drag && mouse.mouseLock.near ) {
-			const t = (mouse.mouseLock.to === "CurSecOrigin")?"s"
+			const t = (mouse.mouseLock.to === "CurSecOrigin")?"S"
 				:(mouse.mouseLock.to === "CurEnds[0]")?"e0"
 				:(mouse.mouseLock.to === "CurEnds[1]")?"e1"
 				:(mouse.mouseLock.to === "CurSlope")?"s"
-				:(mouse.mouseLock.to === "CurOrigin")?"o":"";
+				:(mouse.mouseLock.to === "CurOrigin")?"o":"''";
 				if( !t ) {
 					console.log( "Seelction not found?", mouse.mouseLock.to );
 				}
 			// initial offset of newly created wall is realtive to My scale...
-			l.ws.send( `{op:move,t:${t},id:${mouse.CurSector&&mouse.CurSector.id},wid:${mouse.CurWall.id},scale:${l.scale},lockCreate:${editorState.lockCreate},lockSlope:${editorState.lockSlope},lockLineOrigin:${editorState.lockLineOrigin},x:${rx},y:${ry}}`)
+			console.log( "Sending a type of move...", t, mouse.CurWall?mouse.CurWall.id:-1);
+			l.ws.send( `{op:move,t:${t},id:${mouse.CurSector&&mouse.CurSector.id},wid:${mouse.CurWall?mouse.CurWall.id:-1},scale:${l.scale},lockCreate:${editorState.lockCreate},lockSlope:${editorState.lockSlope},lockLineOrigin:${editorState.lockLineOrigin},x:${rx},y:${ry}}`)
 		}
 
 		else {
@@ -827,39 +882,33 @@ function setupWorld( world ) {
 
 			  if( !mouse.flags.bNormalMode )
 			  {
-				  var pNewWall;
-				  var ps = null;
+				let pNewWall;
+				let ps = null;
   
-				  if( !mouse.flags.bSectorList &&
-					   !mouse.flags.bWallList )
-				  {
-					  var draw = false;
+				if( !mouse.flags.bSectorList 
+				   && !mouse.flags.bWallList )
+				{
+					let draw = false;
   
 					  if( mouse.CurSector  )
 					  {
-						  //o.x = REAL_X(  mouse.x );
-						  //o.y = REAL_Y(  mouse.y );
-						  //del = new Vector( REAL_SCALE(  delx ), REAL_SCALE(  dely ) );
+						pNewWall = mouse.CurSector.findWall( del, o );
+						if(  pNewWall && ( pNewWall !== mouse.CurWall ) ) 
+						{
+							updateWall( pNewWall );
+							//BalanceALine( mouse.pWorld, GetWallLine( mouse.pWorld, pNewWall ) );
+							draw = true;
+						}
+					} else if( mouse.priorCurrentSector  ) {
+						pNewWall = mouse.priorCurrentSector.findWall( del, o );
+						if( pNewWall && ( pNewWall !== mouse.CurWall ) ) 
+						{
+							updateWall( pNewWall );
+							//BalanceALine( mouse.pWorld, GetWallLine( mouse.pWorld, pNewWall ) );
+							draw = true;
+						}
+					  } else {
 
-						  //del.scale( 3 );
-  
-						  //del.y = -del.y;
-							//console.log( "DEL:", del, mouse.x, x )
-						  //DrawLine( 0, del, o, 0, 1, Color( 90, 90, 90 ) );
-  
-						  pNewWall = mouse.CurSector.findWall( del, o );
-						  if(  pNewWall && ( pNewWall !== mouse.CurWall ) ) 
-						  {
-							  // this bit of code... may or may not be needed...
-							  // at this point a sector needs to be found
-							  // before a wall can be found...
-							  //display->nWalls = 1;
-							  //display->CurWallList = &mouse.CurWall;
-							  //console.log( "Set wall:", pNewWall )
-							  mouse.CurWall = pNewWall;
-							  //BalanceALine( mouse.pWorld, GetWallLine( mouse.pWorld, pNewWall ) );
-							  draw = true;
-						  }			  
 					  }
 					  //else
 					  //	lprintf( "no current sector..." );
@@ -901,6 +950,7 @@ function setupWorld( world ) {
 					  }else {
 						  if( !ps && mouse.CurSector ){
 							  draw = true;
+							  mouse.priorCurrentSector = mouse.CurSector;
 							  mouse.CurSector = null;
 							  mouse.CurSectors.length = 0;
 						  }
@@ -1052,19 +1102,51 @@ function processMessage( msg ) {
 }
 
 
+function processImage( image, r,g,b ) {
+	const gameBoard = document.createElement( "canvas" );
+	const gameCtx = gameBoard.getContext( "2d" ) ;
+	gameBoard.width = image.width;
+	gameBoard.height = image.height;
+	gameCtx.fillStyle = "transparent";
+	gameCtx.fillStroke = "transparent";
+	gameCtx.clearRect( 0, 0, 500, 500 );
+	var myImageData = gameCtx.getImageData(0, 0, image.width, image.height);
+	gameCtx.drawImage(image, 0, 0);
+	var myImageData = gameCtx.getImageData(0, 0, image.width, image.height);
+	var outImageData = gameCtx.createImageData(image.width, image.height);
+	var numBytes = myImageData.data.length;
+	for( n = 0; n < numBytes; n+=4 ) {
+		outImageData.data[n+0] = 255-myImageData.data[n+0];
+		outImageData.data[n+1] = 255-myImageData.data[n+1];
+		outImageData.data[n+2] = 255-myImageData.data[n+2];
+		outImageData.data[n+3] = 255-myImageData.data[n+3];
+	}
+	gameCtx.putImageData(outImageData, 0, 0)
+	var image = new Image();
+	image.src = gameBoard.toDataURL();
+	return image;
+}
 
 
 function newImage(src) {  
+	return new Promise( (res,rej)=>{
 	var i = new Image();
 	i.crossOrigin = "Anonymous";
 	i.src = src;
 	requiredImages.push( i );
-	maxRequired++;
 	i.onload = ()=>{
-			requiredImages.pop( i );
+		const idx = requiredImages.findIndex( img=>img===i);
+		if( idx >= 0 ) requiredImages.splice( idx, 1 );
+			res(i);
 			//DOM_text.innerHTML = "Loading... " + (100 - 100*requiredImages.length / maxRequired );
 			//if( requiredImages == 0 ) doWork(); };
 	};
-	return i;
+	i.onerror = ()=>{
+		const idx = requiredImages.findIndex( img=>img===i);
+		if( idx >= 0 ) requiredImages.splice( idx, 1 );
+		rej(i);
+	}
+	
+	})
 }
 
