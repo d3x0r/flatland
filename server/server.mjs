@@ -4,7 +4,7 @@ const colons = import.meta.url.split(':');
 const where = colons.length===2?colons[1].substr(1):colons[2];
 const nearIdx = where.lastIndexOf( "/" );
 const nearPath = where.substr(0, nearIdx );
-console.log( "I think this works for a windows path:...", import.meta.url, nearPath, where );
+//console.log( "I think this works for a windows path:...", import.meta.url, nearPath, where );
 
 
 import {sack} from "sack.vfs" ;
@@ -30,9 +30,6 @@ export const config = {
 }
   
 function Import(a) { return import(a)} 
-let  loginServer = await UserDbRemote.open( );
-console.log( "LOGIN?", loginServer );
-initServer(loginServer );
 
 function initServer( loginServer ) {
 	console.log( "loginserver:", loginServer, loginServer&&loginServer.ws&&loginServer.ws.connection );
@@ -68,7 +65,7 @@ classes.setDecoders( JSOX );
 
 storage.getRoot().then( r=>{
 	root = r;
-console.log( "got root..." );
+	console.log( "got root..." );
 	for( var file of root.files ) {
 		l.worlds.push( new GameWorld( file.name ) );
 	}
@@ -191,6 +188,7 @@ console.log( "on connect:", ws );
 	ws.world = null; // extend socket.
 	ws.noDelay = true;
 	ws.lastMessage = Date.now();
+	ws.user = null;
 	//console.log( "Connect:", ws );
 	ws.onmessage = function( msg_ ) {
 		ws.lastMessage = Date.now();
@@ -200,6 +198,7 @@ try {
       	//console.log( "Received data:", msg );
         //ws.send( msg );
 		if( msg.op === "worlds" ) {
+			ws.user = connections.get( msg.key[0] )
 			ws.send( JSOX.stringify( {op:"worlds", worlds:l.worlds } ) );
 			l.loading.push(ws);
 		} else if( msg.op === "deleteWorld" ) {
@@ -226,8 +225,8 @@ try {
 						ws.World = world;
 						ws.world.world = world;
 						if( !world ) throw new Error( "WORLD FAILED TO LOAD");
-						console.log( "Loaded this world, and can now send it.", world );
-						console.log( "SEND WORLD:\n", JSOX.stringify( world ) );
+						//console.log( "Loaded this world, and can now send it.", world );
+						//console.log( "SEND WORLD:\n", JSOX.stringify( world ) );
 						ws.send( JSOX.stringify( {op:"world", world:world } ) );
 					} );	
 				}
@@ -239,23 +238,24 @@ try {
 				//ws.world.send( ws, m );
 			}
 			if( msg.t === 'o' ) {
-				ws.World.walls[msg.id].move( msg.x, msg.y, msg.lock );
+				ws.World.walls[msg.wid].move( msg.x, msg.y, msg.lockLineOrigin );
 				ws.World.on("update" );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
 			if( msg.t === 's' ) {
-				ws.World.walls[msg.id].turn( msg.x, msg.y, msg.lock );
+				ws.World.walls[msg.wid].turn( msg.x, msg.y, msg.lock );
 				ws.World.on("update" );
 				//const m = JSOX.stringify(msg );
 				//ws.world.send( ws, m );
 			}
 			if( msg.t === 'e0' ) {
-				ws.World.walls[msg.id].setStart( msg.x, msg.y, msg.lock );
+				//console.log( "update line", msg.wid,ws.World.walls[msg.wid].line.id, "lock", msg.lockLineOrigin );
+				ws.World.walls[msg.wid].setStart( msg.x, msg.y, msg.lockSlope, msg.lockLineOrigin );
 				ws.World.on("update" );
 			}
 			if( msg.t === 'e1' ) {
-				ws.World.walls[msg.id].setEnd( msg.x, msg.y, msg.lock );
+				ws.World.walls[msg.wid].setEnd( msg.x, msg.y, msg.lockSlope, msg.lockLineOrigin );
 				ws.World.on("update" );
 				//world.walls[msg.wall].move( msg.x, msg.y );
 				//const m = JSOX.stringify(msg );
@@ -343,22 +343,34 @@ try {
 
 function setupWorldEvents(newWorld, world) {
 	const sendBuffer = [];
+	const sendBufferSector = [];
 	const lines = [];
 	world.on( "update", ()=>{
 		for( let line of lines )
-			sendBuffer.push({op:'Line',id:line.id,data:line.toJSOX() });
+			sendBuffer.push({op:'Line',id:line.id,data:line });
 
 		const buf = sendBuffer.map( (b)=>JSOX.stringify(b) ).join('');
 		//console.log( "--- WORLD UPDATE flush pending changes to all ----", buf );
 		sendBuffer.length = 0;
+		sendBufferSector.length = 0;
 		newWorld.send( null, buf );
 	} );
-	console.trace( "World walls doesn't have events now??", world )
+	//console.trace( "World walls doesn't have events now??", world )
 	world.wallSet.on( "update", (wall)=>{
-		sendBuffer.push({op:"Wall", id:wall.id,data:wall.toJSOX() });
+		sendBuffer.push({op:"Wall", id:wall.id,data:wall });
+		sendBufferSector.push(null)
 	} );
 	world.sectorSet.on( "update", (sector)=>{
-		sendBuffer.push({op:"Sector", id:sector.id,data:sector.toJSOX()});
+		let i;
+		for( i = 0; i < sendBufferSector.length; i++ ) {
+			if( sendBufferSector[i] === sector ) break;
+		}
+		if( i === sendBufferSector.length ) {
+			//console.log( "Update sector... (BIG UPDATE)")
+			sendBuffer.push({op:"Sector", id:sector.id,data:{r:sector.r}});
+			sendBufferSector.push(sector)
+		}
+		//else console.log( "(skipped)Update sector... (BIG UPDATE)")
 	} );
 	world.lineSet.on( "update", (line)=>{
 		if( !lines.find( l=>l===line )){
@@ -388,3 +400,6 @@ function setupWorldEvents(newWorld, world) {
 }
 
 const server = new FlatlandServer();
+let  loginServer = await UserDbRemote.open( server.server.serverOpts );
+console.log( "LOGIN?", loginServer );
+initServer(loginServer );

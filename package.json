@@ -7,15 +7,13 @@
   },
   "main": "server/server.mjs",
   "scripts": {
-    "start": "node --inspect --experimental-loader=sack.vfs/import.mjs server/server.mjs",
+    "start": "node --inspect --import sack.vfs/import server/server.mjs",
+    "debug": "gdb --args node --inspect --import sack.vfs/import server/server.mjs",
     "test": "node --inspect --experimental-loader=sack.vfs/import.mjs test.js",
-    "start2": "node --inspect --experimental-loader=sack.vfs/import.mjs server/server.mjs",
-    "test2": "node  --experimental-loader=sack.vfs/import.mjs test.js",
-    "link": "npm link @d3x0r/popups jsox sack.vfs @d3x0r/srg @d3x0r/srg2 @d3x0r/user-database-remote @d3x0r/socket-service @d3x0r/object-storage"
+    "link": "npm link @d3x0r/popups jsox sack.vfs @d3x0r/srg2 @d3x0r/user-database-remote @d3x0r/socket-service @d3x0r/object-storage"
   },
   "dependencies": {
     "@d3x0r/popups": "latest",
-    "@d3x0r/srg": "^1.2.0",
     "@d3x0r/srg2": "latest",
     "@d3x0r/socket-service": "latest",
     "@d3x0r/user-database-remote": "latest",
