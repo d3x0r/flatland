@@ -2,7 +2,7 @@
   "name": "@d3x0r/flatland",
   "version": "0.3.101",
   "description": "Flatland game (for heroku?)",
-  "engines": {
+  "engines-unused": {
     "node": "15.x"
   },
   "main": "server/server.mjs",
